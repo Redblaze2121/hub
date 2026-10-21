@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Wright Hub</title>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --ink: #1f2420; --quiet: #6b716c; --line: #e3e1da;
+    --accent: #2e6b45; --accent-soft: #e6f0e9; --warn: #a3471f; --warn-soft: #fbece6; --soc: #5b4bb7; --soc-soft: #efedff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #171a18; --card: #202522; --ink: #e9ece8; --quiet: #9aa29c; --line: #333a35;
+      --accent: #7cc497; --accent-soft: #24352a; --warn: #f0926b; --warn-soft: #3a2721; --soc: #b3a8ff; --soc-soft: #2b2840; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.4 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  .tabs { display: flex; gap: 4px; }
+  .tab { border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 8px 16px; border-radius: 999px; font-size: 15px; cursor: pointer; }
+  .tab.on { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .spacer { flex: 1; }
+  .meta { color: var(--quiet); font-size: 13px; }
+  button.small { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 8px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+  button.small:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .reading { margin: 12px 16px 0; padding: 10px 14px; background: var(--accent-soft); border-radius: 10px; font-size: 15px; }
+  .reading a { color: var(--accent); font-weight: 600; }
+  .test { background: var(--warn-soft); color: var(--warn); padding: 6px 16px; font-size: 13px; }
+  main { padding: 12px 16px 40px; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); align-items: start; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+  .card h2 { font-size: 15px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
+  .card h2 .count { color: var(--quiet); font-weight: 400; font-size: 13px; }
+  .card h3 { font-size: 13px; margin: 12px 0 4px; color: var(--quiet); text-transform: uppercase; letter-spacing: .04em; }
+  .item { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); align-items: flex-start; }
+  .item:first-of-type { border-top: 0; }
+  .item input[type=checkbox] { width: 22px; height: 22px; margin-top: 1px; accent-color: var(--accent); flex: none; cursor: pointer; }
+  .body { flex: 1; min-width: 0; }
+  .title { font-weight: 500; overflow-wrap: anywhere; }
+  .title.p1 { font-weight: 700; }
+  .sub { color: var(--quiet); font-size: 13px; overflow-wrap: anywhere; }
+  .next { font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+  .late { color: var(--warn); font-weight: 600; }
+  .why { display: inline-block; background: var(--warn-soft); color: var(--warn); border-radius: 6px; padding: 0 6px; font-size: 12px; margin-top: 2px; }
+  .more { background: none; border: 0; color: var(--quiet); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; }
+  .actions { display: none; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
+  .actions.open { display: flex; }
+  .actions input, .actions select, form.row input, form.row select { font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+  .day { font-weight: 700; margin: 10px 0 2px; font-size: 14px; }
+  .ev { display: flex; gap: 8px; padding: 4px 0; font-size: 15px; }
+  .ev .t { width: 70px; flex: none; color: var(--quiet); font-size: 13px; padding-top: 1px; }
+  .ev.social .title { color: var(--soc); }
+  .ev .cal { color: var(--quiet); font-size: 12px; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--soc-soft); color: var(--soc); font-size: 12px; }
+  form.row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  form.row input[type=text] { flex: 1; min-width: 140px; }
+  .empty { color: var(--quiet); font-size: 14px; padding: 4px 0; }
+  .err { color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  td, th { overflow-wrap: anywhere; }
+  form.edit { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; width: 100%; }
+  form.edit .full { grid-column: 1 / -1; }
+  form.edit input, form.edit select, form.edit textarea { font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; }
+  form.edit label { font-size: 12px; color: var(--quiet); display: block; }
+  .notes { font-size: 12px; color: var(--quiet); margin-top: 2px; overflow-wrap: anywhere; }
+  td, th { text-align: left; padding: 4px 6px; border-top: 1px solid var(--line); vertical-align: top; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; display: none; z-index: 10; max-width: 90vw; }
+  details summary { cursor: pointer; color: var(--quiet); font-size: 13px; margin-top: 8px; }
+  a { color: var(--accent); }
+  .wide { grid-column: span 2; }
+  .link { background: none; border: 0; color: var(--accent); font-size: 13px; padding: 6px 0; cursor: pointer; text-decoration: underline; }
+  .tap { cursor: pointer; }
+  .detail { width: 100%; font-size: 14px; background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+  .detail.instr { white-space: pre-wrap; border-left: 3px solid var(--accent); }
+  .dlabel { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--quiet); margin-bottom: 2px; }
+  .nline { padding: 3px 0; border-top: 1px dashed var(--line); font-size: 13px; overflow-wrap: anywhere; }
+  .nline:first-of-type { border-top: 0; }
+  .decide { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; width: 100%; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); vertical-align: 1px; }
+  .badge.new { background: var(--warn-soft); color: var(--warn); }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+  .pill { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 5px 12px; font-size: 14px; cursor: pointer; }
+  .pill.on { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .pill .count { opacity: .7; font-size: 12px; }
+  .hero { border-color: var(--accent); border-width: 2px; }
+  .hero h2 { font-size: 17px; }
+  details.addbox { margin-top: 10px; } details.addbox summary { color: var(--accent); font-size: 14px; font-weight: 600; }
+  form.edit textarea { resize: vertical; }
+  .voice { text-decoration: none; border: 1px solid var(--accent); color: var(--accent); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
+  .warnc { border-color: var(--warn); background: var(--warn-soft); }
+  @media (max-width: 720px) { .wide { grid-column: auto; } main { grid-template-columns: 1fr; } }
+  .lock { position: fixed; inset: 0; background: var(--bg); z-index: 20; display: flex; align-items: flex-start; justify-content: center; padding: 15vh 16px 0; }
+  .lockbox { width: 100%; max-width: 360px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .lockbox form { display: grid; gap: 10px; } .lockbox input { font-size: 18px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
+  .lockbox button { font-size: 16px; padding: 10px; }
+  .foot { text-align: center; padding: 0 16px 30px; color: var(--quiet); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="test" id="testbanner" style="display:none">TEST build — reads and writes the (TEST) copies only. Your live sheets are not touched.</div>
+<header>
+  <h1>Wright Hub</h1>
+  <div class="tabs" id="tabs"></div>
+  <div class="spacer"></div>
+  <a class="voice" id="voicebtn" style="display:none" target="_blank" title="Talk to Claude about the hub (opens the Claude app)">🎙 Claude</a>
+  <span class="meta" id="stamp">Loading…</span>
+  <button class="small" onclick="load()">Refresh</button>
+</header>
+<div class="reading" id="reading" style="display:none"></div>
+<main id="main"><div class="card">Loading…</div></main>
+<div id="toast"></div>
+<div id="lock" class="lock" style="display:none"><div class="lockbox">
+  <h2 id="lockTitle">Wright Hub</h2><p id="lockMsg" class="sub">Enter your passcode.</p>
+  <form id="lockForm" onsubmit="event.preventDefault();HUB.submit(this)">
+    <input type="password" name="p1" id="p1" autocomplete="current-password" placeholder="Passcode" required>
+    <input type="password" name="p2" id="p2" autocomplete="new-password" placeholder="Type it again" style="display:none">
+    <button class="small primary" id="lockBtn">Open</button>
+  </form><p class="sub" id="lockErr" style="color:var(--warn)"></p></div></div>
+<footer class="foot"><button type="button" class="link" onclick="HUB.change()">Change passcode</button> · <button type="button" class="link" onclick="HUB.lock()">Lock this device</button></footer>
+
+<script>
+let MODE = 'business';
+let KEY = '';
+/* ---- github.io version: talk to the Google script with fetch, no Google login ---- */
+const HUB = {
+  who: 'justin', url: 'https://script.google.com/macros/s/AKfycbw9AjX3aPJagbFjLUMPGiq7OdJFlPr7-7W-Rg1NL4BtZGoSG_4pqpNbOS1DuhcX_im6yQ/exec', mem: '',
+  get pass() { try { return localStorage.getItem('hubPass:' + this.who) || ''; } catch (e) { return this.mem; } },
+  set pass(v) { this.mem = v; try { if (v) localStorage.setItem('hubPass:' + this.who, v); else localStorage.removeItem('hubPass:' + this.who); } catch (e) {} },
+  post(fn, args) {
+    return fetch(this.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args }), credentials: 'omit', redirect: 'follow', cache: 'no-store' })
+      .then(r => r.text()).then(t => { try { return JSON.parse(t); } catch (e) { return { ok: false, error: 'Google sent an unexpected reply. Try again in a minute.' }; } },
+        () => ({ ok: false, error: 'Could not reach Google. Check your connection and try again.' }));
+  },
+  show(mode, msg, err) {
+    this.mode = mode;
+    $('#lock').style.display = 'flex';
+    $('#lockTitle').textContent = mode === 'setup' ? 'Create your passcode' : mode === 'change' ? 'New passcode' : 'Wright Hub';
+    $('#lockMsg').textContent = msg || (mode === 'setup' ? 'Pick a passcode (6+ characters). This device will remember it.' : 'Enter your passcode.');
+    $('#p2').style.display = mode === 'enter' ? 'none' : 'block';
+    $('#p2').required = mode !== 'enter';
+    $('#lockBtn').textContent = mode === 'enter' ? 'Open' : 'Save passcode';
+    $('#lockErr').textContent = err || '';
+    $('#p1').value = ''; $('#p2').value = '';
+    setTimeout(() => $('#p1').focus(), 50);
+  },
+  hide() { $('#lock').style.display = 'none'; },
+  start(pass) { this.pass = pass; KEY = 'p:' + pass; this.hide(); load(); },
+  submit(f) {
+    const p1 = f.p1.value.trim(), p2 = f.p2.value.trim();
+    if (this.mode === 'enter') { this.start(p1); return; }
+    if (p1.length < 6) { $('#lockErr').textContent = 'Use at least 6 characters.'; return; }
+    if (p1 !== p2) { $('#lockErr').textContent = 'The two entries don\'t match.'; return; }
+    const auth = this.mode === 'setup' ? this.setupKey : KEY;
+    $('#lockBtn').disabled = true;
+    this.post('setPasscode', [auth, p1]).then(r => {
+      $('#lockBtn').disabled = false;
+      if (!r.ok) { $('#lockErr').textContent = 'Not saved: ' + r.error; return; }
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+      this.start(p1); toast('Passcode saved');
+    });
+  },
+  change() { if (!KEY) return; this.show('change', 'Pick a new passcode (6+ characters). Other devices will need the new one.'); },
+  lock() { this.pass = ''; KEY = ''; DATA = null; $('#main').innerHTML = ''; this.show('enter', 'Locked. Enter your passcode to open.'); },
+  boot() {
+    const m = /^#setup=([A-Za-z0-9]{32,})$/.exec(location.hash || '');
+    if (m) { this.setupKey = m[1]; this.show('setup'); return; }
+    if (this.pass) this.start(this.pass); else this.show('enter');
+  },
+  run(ok, fail) {
+    const self = this;
+    return new Proxy({}, { get(t, name) {
+      if (name === 'withSuccessHandler') return f => self.run(f, fail);
+      if (name === 'withFailureHandler') return f => self.run(ok, f);
+      return (...args) => self.post(name, args).then(r => {
+        if (r.ok) {
+          if (name === 'getData' && r.result) {
+            MODE = r.result.mode || 'business';
+            $('#testbanner').style.display = r.result.test ? 'block' : 'none';
+            const v = $('#voicebtn'); if (r.result.voice) { v.href = r.result.voice; v.style.display = ''; } else v.style.display = 'none';
+          }
+          if (ok) ok(r.result);
+        } else {
+          if (/Not authorized/.test(r.error)) { self.pass = ''; KEY = ''; self.show('enter', '', 'That passcode didn\'t work (or it was changed).'); }
+          if (fail) fail({ message: r.error });
+        }
+      });
+    } });
+  },
+};
+window.google = { script: { get run() { return HUB.run(null, null); } } };
+
+let DATA = null, TAB = MODE === 'full' ? 'home' : 'business', busy = false, timer = null;
+try { const t = localStorage.getItem('hubTab'); if (t && (MODE === 'full' || t === 'business')) TAB = t; } catch (e) {}
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const plus = n => { const d = new Date(); d.setDate(d.getDate() + n); return ymd(d); };
+const nice = s => { if (!s) return ''; const [y, m, d] = s.slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' }); };
+
+function toast(msg, ms) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', ms || 2500); }
+
+function load() {
+  $('#stamp').textContent = 'Loading…';
+  const slow = setTimeout(() => { $('#stamp').textContent = 'Still loading…'; if (!DATA) $('#main').innerHTML = '<div class="card">Still waiting on Google (first load of the day can take 20–30 seconds). If nothing appears in a minute, press Refresh.</div>'; }, 15000);
+  google.script.run.withSuccessHandler(d => { clearTimeout(slow); DATA = d; render(); $('#stamp').textContent = 'Updated ' + d.generated; })
+    .withFailureHandler(e => { clearTimeout(slow); $('#stamp').textContent = 'Could not load'; $('#main').innerHTML = '<div class="card err">Could not load: ' + esc(e.message) + '</div>'; }).getData(KEY);
+}
+
+function call(fn, args, okMsg) {
+  if (busy) return; busy = true;
+  document.body.style.cursor = 'progress';
+  google.script.run.withSuccessHandler(() => { busy = false; document.body.style.cursor = ''; toast(okMsg || 'Saved'); load(); })
+    .withFailureHandler(e => { busy = false; document.body.style.cursor = ''; toast('Not saved: ' + e.message, 6000); load(); })[fn].apply(null, [KEY].concat(args));
+}
+
+function setTab(t) { TAB = t; try { localStorage.setItem('hubTab', t); } catch (e) {} render(); }
+
+function render() {
+  try { draw(); } catch (err) { $('#main').innerHTML = '<div class="card err">Display problem: ' + esc(err.message) + '. Press Refresh; if it repeats, tell Claude.</div>'; }
+}
+
+function draw() {
+  const tabs = MODE === 'full' ? [['home', 'Home'], ['business', 'Business'], ['health', 'Health']] : [['business', 'Business']];
+  $('#tabs').innerHTML = tabs.map(([k, n]) => `<button class="tab ${TAB === k ? 'on' : ''}" onclick="setTab('${k}')">${n}</button>`).join('');
+  const r = DATA.reading || {};
+  $('#reading').style.display = DATA.reading ? 'block' : 'none';
+  $('#reading').innerHTML = r.ok
+    ? `Today's reading (${esc(r.date)}): <a href="${esc(r.url)}" target="_blank">${esc(r.passage)}</a>${r.bonus ? ' · Bonus: ' + esc(r.bonus) : ''}`
+    : `Today's reading: <a href="${esc(r.url || 'https:\/\/valleycreek.plus/readingplan')}" target="_blank">open the reading plan</a> <span class="meta">(couldn't read today's entry)</span>`;
+  const m = $('#main');
+  if (TAB === 'home') m.innerHTML = homeHtml(DATA.home);
+  else if (TAB === 'business') m.innerHTML = bizHtml(DATA.business);
+  else m.innerHTML = healthHtml(DATA.health);
+}
+
+/* ---------- building blocks ---------- */
+
+/* ---------- edit helpers ---------- */
+function changed(form) {
+  const f = {};
+  [...form.elements].forEach(el => {
+    if (!el.name) return;
+    if (el.name === 'note') { if (el.value.trim()) f.note = el.value.trim(); return; }
+    if (el.type === 'checkbox') { if (el.checked) f[el.name] = true; return; }
+    const orig = el.tagName === 'SELECT' ? ([...el.options].find(o => o.defaultSelected) || el.options[0]).value : el.defaultValue;
+    if (el.value !== orig) f[el.name] = el.value;
+  });
+  return f;
+}
+function opts(list, cur) { return list.map(o => `<option${String(o) === String(cur) ? ' selected' : ''}>${esc(o)}</option>`).join(''); }
+function saveForm(form, fn, a, b) {
+  const f = changed(form);
+  if (!Object.keys(f).length) { toast('Nothing changed'); return; }
+  call(fn, b === undefined ? [a, f] : [a, b, f], 'Saved');
+}
+const STATUSES = ['Open', 'In progress', 'Waiting', 'Deferred', 'Needs review', 'Done'];
+const STAGES = ['Initial Contact', 'Estimate', 'Estimate Follow-up 1', 'Estimate Follow-up 2', 'Scheduled', '30-60 Day Follow-up', 'Deferred', 'Won', 'Closed / Lost'];
+const OWNERS = { home: ['Justin', 'Amy', 'Anyone'], business: ['Justin', 'Alex', 'Jeremy', 'Micah'] };
+
+
+function card(title, count, inner, cls) { return `<section class="card ${cls || ''}"><h2>${title}${count != null ? `<span class="count">${count}</span>` : ''}</h2>${inner}</section>`; }
+function empty(s) { return `<div class="empty">${s || 'Nothing here.'}</div>`; }
+function errBox(x) { return x && x.error ? `<section class="card"><div class="err">Couldn't load: ${esc(x.error)}</div></section>` : ''; }
+
+function calHtml(items) {
+  if (!items || !items.length) return empty('Nothing on the calendar.');
+  let out = '', last = '';
+  items.forEach(e => {
+    const d = e.start.slice(0, 10);
+    if (d !== last) { out += `<div class="day">${d === DATA.today ? 'Today' : nice(d)}</div>`; last = d; }
+    out += `<div class="ev ${e.social ? 'social' : ''}"><div class="t">${esc(e.time)}</div><div class="body"><div class="title ${e.error ? 'err' : ''}">${esc(e.title)}</div><div class="cal">${e.social ? '<span class="chip">Social</span> ' : ''}${esc(e.cal)}${e.where ? ' · ' + esc(e.where) : ''}</div></div></div>`;
+  });
+  return out;
+}
+
+/* ---------- shared pieces ---------- */
+const SHOW = {};
+function listBlock(key, items, render, none, n) {
+  n = n || 5;
+  if (!items || !items.length) return empty(none);
+  const all = !!SHOW[key], shown = all ? items : items.slice(0, n);
+  return shown.map(render).join('') + (items.length > n ? `<button type="button" class="link" onclick="SHOW['${key}']=${all ? 'false' : 'true'};render()">${all ? 'Show less' : 'Show all (' + items.length + ')'}</button>` : '');
+}
+function tog(ev, elId) {
+  const t = ev.target;
+  if (t.closest('a,button,input,select,textarea,label,form,.actions')) return;
+  const el = document.getElementById(elId); if (el) el.classList.toggle('open');
+}
+function notesHtml(s) {
+  if (!s) return '';
+  const lines = String(s).split(' | ').map(x => x.trim()).filter(Boolean);
+  const recent = lines.slice(-6), older = lines.slice(0, -6);
+  return `<div class="detail"><div class="dlabel">Notes</div>${older.length ? `<details><summary>${older.length} older</summary>${older.map(l => `<div class="nline">${esc(l)}</div>`).join('')}</details>` : ''}${recent.map(l => `<div class="nline">${esc(l)}</div>`).join('')}</div>`;
+}
+let HC = 0;
+function histBtn(id) {
+  const hid = 'h' + (++HC);
+  return `<div class="detail"><button type="button" class="link" onclick="hist('${esc(id)}','${hid}')">Show history</button><div id="${hid}"></div></div>`;
+}
+function hist(id, elId) {
+  const el = document.getElementById(elId); el.textContent = 'Loading…';
+  google.script.run.withSuccessHandler(h => {
+    el.innerHTML = h && h.length ? h.map(x => `<div class="nline"><b>${esc(x.when)}</b> ${esc(x.who)} · ${esc(x.action)}${x.undone ? ' (undone)' : ''}<br><span class="sub">${esc(x.changes)}</span></div>`).join('') : '<div class="sub">No changes recorded yet (history starts 10/21).</div>';
+  }).withFailureHandler(e => { el.textContent = 'Could not load: ' + e.message; }).getHistory(KEY, id);
+}
+function optsV(pairs, cur) { return pairs.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(l)}</option>`).join(''); }
+const OWNER_PAIRS = () => [['', 'Unassigned']].concat(OWNERS.business.map(o => [o, o]));
+const badge = k => `<span class="badge">${esc(k)}</span>`;
+const ME = () => (DATA.business && DATA.business.me) || 'Justin';
+const isMine = owner => ME() === 'Justin' ? (!owner || owner === 'Justin') : owner === ME();
+
+/* ---------- tasks ---------- */
+
+function taskItem(side, t, tag) {
+  const id = esc(t.id), key = side + '-' + id + (tag ? '-' + tag : '');
+  const date = t.due || t.snooze;
+  const btn = (label, js, cls) => `<button type="button" class="small ${cls || ''}" onclick="${js}">${label}</button>`;
+  const dateBox = `<input type="date" id="d-${key}" value="${plus(3)}">`;
+  const dv = `document.getElementById('d-${key}').value`;
+  const decide = t.why || t.state === 'review'
+    ? `<div class="decide">${btn('Do it now', `call('taskAction',['${side}','${id}','reopen'],'Back on the list')`, 'primary')}${btn('Still waiting → until', `call('taskAction',['${side}','${id}','waiting',${dv}],'Waiting')`)}${dateBox}${btn('Close it', `call('taskAction',['${side}','${id}','done'],'Closed')`)}</div>` : '';
+  const owners = side === 'home' ? OWNERS.home.map(o => [o, o]) : OWNER_PAIRS();
+  if (t.owner && !owners.some(o => o[0] === t.owner)) owners.push([t.owner, t.owner]);
+  const from = side === 'business' && t.by && t.by !== ME() && t.owner === ME() ? `<span class="chip">from ${esc(t.by)}</span> ` : '';
+  return `<div class="item">
+    <input type="checkbox" title="Mark done" onclick="this.disabled=true;call('taskAction',['${side}','${id}','done'],'Done ✓')">
+    <div class="body tap" onclick="tog(event,'a-${key}')">
+      <div class="title ${t.pri === 1 ? 'p1' : ''}">${tag ? badge(tag) + ' ' : ''}${esc(t.title)}</div>
+      <div class="sub">${date ? `<span class="${t.overdue ? 'late' : ''}">${nice(date)}</span> · ` : ''}${from}${esc(t.owner || 'Unassigned')}${t.cat ? ' · ' + esc(t.cat) : ''}${t.instr ? ' · 📋' : ''}</div>
+      ${t.why ? `<span class="why">${esc(t.why)}</span>` : ''}
+      ${t.next ? `<div class="next">→ ${esc(t.next)}</div>` : ''}
+      <div class="actions" id="a-${key}">
+        ${t.instr ? `<div class="detail instr"><div class="dlabel">Instructions</div>${esc(t.instr)}</div>` : ''}
+        ${notesHtml(t.notes)}
+        ${side === 'business' ? histBtn(t.id) : ''}
+        ${decide || `<div class="decide">${btn('Tomorrow', `call('taskAction',['${side}','${id}','snooze','${plus(1)}'],'Snoozed')`)}${btn('+1 week', `call('taskAction',['${side}','${id}','snooze','${plus(7)}'],'Snoozed')`)}${dateBox}${btn('Snooze to', `call('taskAction',['${side}','${id}','snooze',${dv}],'Snoozed')`)}${btn('Waiting until', `call('taskAction',['${side}','${id}','waiting',${dv}],'Marked waiting')`)}${btn('Defer to', `call('taskAction',['${side}','${id}','defer',${dv}],'Deferred')`)}</div>`}
+        <form class="edit" onsubmit="event.preventDefault();saveForm(this,'taskEdit','${side}','${id}')">
+          <label class="full">Title<input name="title" value="${esc(t.title)}"></label>
+          <label class="full">Next action<input name="next" value="${esc(t.next)}"></label>
+          ${side === 'business' ? `<label class="full">Instructions (for whoever does it)<textarea name="instr" rows="3">${esc(t.instr || '')}</textarea></label>` : ''}
+          <label>Status<select name="status">${opts(STATUSES, t.status)}</select></label>
+          <label>Owner<select name="owner">${optsV(owners, t.owner)}</select></label>
+          <label>Priority<select name="pri">${opts([1, 2, 3], t.pri)}</select></label>
+          <label>Due<input type="date" name="due" value="${esc(t.due)}"></label>
+          <label class="full">Add a note<input name="note" placeholder="What happened? (tap the mic on your keyboard)"></label>
+          <button class="small primary full">Save changes</button>
+        </form>
+      </div>
+    </div>
+    <button class="more" title="Open" onclick="document.getElementById('a-${key}').classList.toggle('open')">⋯</button>
+  </div>`;
+}
+
+function taskList(side, list, none) { return list && list.length ? list.map(t => taskItem(side, t)).join('') : empty(none); }
+
+function addTaskForm(side) {
+  if (side === 'home') return `<form class="row" onsubmit="event.preventDefault();call('addTask',['home',this.t.value,this.d.value,this.o.value],'Added');this.reset()">
+    <input type="text" name="t" placeholder="Add a task…" required><input type="date" name="d">
+    <select name="o">${OWNERS.home.map(o => `<option>${o}</option>`).join('')}</select><button class="small primary">Add</button></form>`;
+  const me = ME();
+  return `<details class="addbox"><summary>+ Add a task</summary><form class="edit" onsubmit="event.preventDefault();call('addTask',['business',this.t.value,this.d.value,this.o.value,'Clients & Jobs',this.i.value],'Added');this.reset()">
+    <label class="full">Task<input type="text" name="t" required placeholder="What needs doing"></label>
+    <label>Due<input type="date" name="d"></label>
+    <label>Who<select name="o">${optsV(OWNER_PAIRS(), me === 'Justin' ? 'Justin' : me)}</select></label>
+    <label class="full">Instructions (optional)<textarea name="i" rows="3" placeholder="Details for whoever does it"></textarea></label>
+    <button class="small primary full">Add task</button></form></details>`;
+}
+
+/* ---------- Home ---------- */
+
+function homeHtml(h) {
+  if (!h || h.error) return errBox(h || { error: 'No data' });
+  const t = h.tasks;
+  const items = t.review.concat(t.due, t.upcoming, t.open);
+  const tasks = listBlock('home-tasks', items, x => taskItem('home', x), 'Nothing due.') + addTaskForm('home');
+  const rec = h.recurring;
+  const recEdit = x => `<div class="actions" id="r-${esc(x.id)}"><form class="edit" onsubmit="event.preventDefault();saveForm(this,'recurringEdit','${esc(x.id)}')">
+      <label>Every<input type="number" min="1" name="n" value="${esc(x.n)}"></label>
+      <label>Unit<select name="unit">${opts(['days', 'weeks', 'months', 'years'], x.unit)}</select></label>
+      <label>Who<input name="who" value="${esc(x.who)}"></label>
+      <label>Skip to<input type="date" name="skipTo"></label>
+      <label class="full">Add a note<input name="note" placeholder="e.g. filter size 16x25x1"></label>
+      <button class="small primary full">Save</button></form></div>`;
+  const recItem = x => `<div class="item"><input type="checkbox" title="Done today" onclick="this.disabled=true;call('recurringDone',['${esc(x.id)}'],'Logged')"><div class="body tap" onclick="tog(event,'r-${esc(x.id)}')"><div class="title">${esc(x.title)}</div><div class="sub"><span class="${x.overdue ? 'late' : ''}">${nice(x.next)}</span> · every ${esc(x.every)} · ${esc(x.who)}</div>${recEdit(x)}</div><button class="more" onclick="document.getElementById('r-${esc(x.id)}').classList.toggle('open')">⋯</button></div>`;
+  const recHtml = listBlock('home-rec', rec.items, recItem, 'Nothing coming due.') +
+    (rec.untracked.length ? `<details><summary>${rec.untracked.length} not tracked yet — tick the ones done recently</summary>${rec.untracked.map(x => `<div class="item"><input type="checkbox" title="Done today" onclick="this.disabled=true;call('recurringDone',['${esc(x.id)}'],'Tracking started')"><div class="body"><div class="title">${esc(x.title)}</div><div class="sub">every ${esc(x.every)}</div></div></div>`).join('')}</details>` : '');
+  const shopItem = s => `<div class="item"><input type="checkbox" title="Bought" data-k="${esc(s.key)}" onclick="this.disabled=true;call('shoppingCheck',[this.dataset.k],'Checked off')"><div class="body"><div class="title">${esc(s.item)}</div>${s.store ? `<div class="sub">${esc(s.store)}</div>` : ''}</div><button class="small" title="Remove (not buying)" data-k="${esc(s.key)}" onclick="call('shoppingRemove',[this.dataset.k,''],'Removed')">✕</button></div>`;
+  const shop = listBlock('home-shop', h.shopping, shopItem, 'List is empty.', 8) +
+    `<form class="row" onsubmit="event.preventDefault();call('shoppingAdd',[this.i.value,this.s.value],'Added');this.reset()"><input type="text" name="i" placeholder="Add item…" required><select name="s"><option value="">Store</option><option>Kroger</option><option>Sam's Club</option><option>H Mart</option><option>Walmart</option><option>Costco</option></select><button class="small primary">Add</button></form>`;
+  const meals = h.meals.length ? h.meals.map(x => `<div class="item"><div class="body"><div class="title">${esc(x.dinner)}</div><div class="sub">Day ${esc(x.day)}${x.notes ? ' · ' + esc(x.notes) : ''}</div></div></div>`).join('') : empty('No meal plan.');
+  return card('Tasks', items.length, tasks) +
+    card('Coming up', null, calHtml(h.calendar)) +
+    card('House & recurring', rec.items.length, recHtml) +
+    card('Shopping list', h.shopping.length, shop) +
+    card('Meals', null, meals);
+}
+
+/* ---------- Business: follow-ups, leads, inbox, visits ---------- */
+
+function fuItem(f, tag) {
+  const id = esc(f.id), key = 'f-' + id + (tag ? '-' + tag : '');
+  return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
+    <div class="title">${tag ? badge(tag) + ' ' : ''}${esc(f.client)} <span class="sub">— ${esc(f.type)}</span></div>
+    <div class="sub"><span class="${f.overdue ? 'late' : ''}">${nice(f.due)}</span> · ${esc(f.owner || 'Unassigned')}${f.phone ? ` · <a href="tel:${esc(f.phone)}">call</a> · <a href="sms:${esc(f.phone)}">text</a>` : ''}${f.email ? ` · <a href="mailto:${esc(f.email)}">email</a>` : ''}</div>
+    ${f.context ? `<div class="next">${esc(f.context)}</div>` : ''}
+    ${f.recent ? `<div class="notes">Recent: ${esc(f.recent)}</div>` : ''}
+    <div class="actions" id="${key}">
+      ${notesHtml(f.notes)}${histBtn(f.id)}
+      <form class="edit" onsubmit="event.preventDefault();call('logFollowup',['${id}',this.m.value,this.o.value,this.n.value],'Follow-up logged')">
+        <label>How<select name="m"><option>Call</option><option>Text</option><option>Email</option><option>In person</option></select></label>
+        <label>Outcome<select name="o"><option>Happy</option><option>Issue to fix</option><option>New work</option><option>No answer</option><option>Not interested</option><option>Won</option><option>Lost</option></select></label>
+        <label class="full">Note<input type="text" name="n" placeholder="What was said (optional)"></label>
+        <button class="small primary full">Log it (done)</button>
+      </form>
+      <form class="edit" onsubmit="event.preventDefault();saveForm(this,'followupEdit','${id}')">
+        <label>Move to<input type="date" name="due" value="${esc(f.due)}"></label>
+        <label>Owner<select name="owner">${optsV(OWNER_PAIRS(), f.owner)}</select></label>
+        <label class="full"><input type="checkbox" name="skip" style="width:auto"> Not needed (close it)</label>
+        <label class="full">Add a note<input name="note" placeholder="Note without closing it"></label>
+        <button class="small full">Save</button>
+      </form>
+    </div></div>
+    <button class="small" onclick="document.getElementById('${key}').classList.toggle('open')">Log</button></div>`;
+}
+
+function leadItem(l, tag) {
+  const id = esc(l.id), key = 'l-' + id + (tag ? '-' + tag : '');
+  const stages = STAGES.indexOf(l.stage) < 0 ? STAGES.concat([l.stage]) : STAGES;
+  return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
+    <div class="title">${tag ? badge(tag) + ' ' : ''}${esc(l.client)} <span class="sub">— ${esc(l.job)}</span></div>
+    <div class="sub">${l.next ? `<span class="${l.overdue ? 'late' : ''}">${nice(l.next)}</span> · ` : 'No date · '}${esc(l.stage)} · ${esc(l.owner || 'Unassigned')}</div>
+    ${l.action ? `<div class="next">→ ${esc(l.action)}</div>` : ''}
+    <div class="actions" id="${key}">
+      ${histBtn(l.id)}
+      <form class="edit" onsubmit="event.preventDefault();saveForm(this,'leadEdit','${id}')">
+        <label>Stage<select name="stage">${opts(stages, l.stage)}</select></label>
+        <label>Next touch<input type="date" name="next" value="${esc(l.next)}"></label>
+        <label>Owner<select name="owner">${optsV(OWNER_PAIRS(), l.owner)}</select></label>
+        <label class="full">Next action<input name="action" value="${esc(l.action)}"></label>
+        <label class="full"><input type="checkbox" name="touched" style="width:auto"> Contacted them today</label>
+        <button class="small primary full">Save</button>
+      </form>
+    </div></div>
+    <button class="more" onclick="document.getElementById('${key}').classList.toggle('open')">⋯</button></div>`;
+}
+
+const KIND_ICON = { 'Missed call': '📞', 'Voicemail': '📼', 'Text': '💬', 'Email lead': '✉️', 'Call': '📞' };
+function inboxItem(x, tag) {
+  const id = esc(x.id), key = 'i-' + id + (tag ? '-' + tag : '');
+  const who = x.name ? `${esc(x.name)} <span class="sub">${esc(x.from)}</span>` : esc(x.from);
+  return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
+    <div class="title">${tag ? badge(tag) + ' ' : ''}${KIND_ICON[x.kind] || '•'} ${who}</div>
+    <div class="sub"><span class="${x.ageH >= 24 ? 'late' : ''}">${esc(x.when)}</span> · ${esc(x.kind)}${x.line ? ' · ' + esc(x.line) : ''} · ${esc(x.owner || 'Unassigned')}${x.match ? ' · ' + esc(x.match) : ''}${x.phone ? ` · <a href="tel:${esc(x.phone)}">call</a> · <a href="sms:${esc(x.phone)}">text</a>` : ''}${x.link ? ` · <a href="${esc(x.link)}" target="_blank">open</a>` : ''}</div>
+    ${x.summary ? `<div class="next">${esc(x.summary)}</div>` : ''}
+    <div class="actions" id="${key}">
+      <form class="edit" onsubmit="event.preventDefault();call('inboxAction',['${id}','handled',{note:this.note.value}],'Marked handled')">
+        <label class="full">Note (optional)<input name="note" placeholder="What you did"></label>
+        <button class="small primary">Handled</button>
+        <button class="small" type="button" onclick="call('inboxAction',['${id}','ignore',{note:this.form.note.value}],'Marked not needed')">Not needed</button>
+      </form>
+      <form class="row" onsubmit="event.preventDefault();call('inboxAction',['${id}','assign',{owner:this.o.value}],'Handed over')">
+        <label class="sub">Give to <select name="o">${OWNERS.business.map(o => `<option${o === x.owner ? ' selected' : ''}>${o}</option>`).join('')}</select></label>
+        <button class="small">Give</button>
+      </form>
+      <form class="edit" onsubmit="event.preventDefault();call('inboxAction',['${id}','followup',{name:this.name.value,type:this.type.value,due:this.due.value,owner:this.owner.value,note:this.note.value}],'Follow-up created')">
+        <label class="full">Name<input name="name" value="${esc(x.name)}" placeholder="Who is this?"></label>
+        <label>Type<select name="type">${opts(['New lead', 'Call back', 'Estimate', 'Issue to fix', 'Check-in'], 'New lead')}</select></label>
+        <label>When<input type="date" name="due" value="${esc(DATA.today)}"></label>
+        <label>Owner<select name="owner">${opts(OWNERS.business, x.owner || ME())}</select></label>
+        <label>Note<input name="note"></label>
+        <button class="small full">Make a follow-up</button>
+      </form>
+    </div></div>
+    <button class="small" onclick="document.getElementById('${key}').classList.toggle('open')">Do</button></div>`;
+}
+
+function mapLink(addr) { return addr ? `<a href="${'https:\/\/maps.google.com/?q=' + encodeURIComponent(addr)}" target="_blank">map</a>` : ''; }
+function visitItem(v, tag) {
+  const id = esc(v.id), key = 'v-' + id + (tag ? '-' + tag : '');
+  return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
+    <div class="title">${tag ? badge(tag) + ' ' : ''}📍 ${esc(v.client)}</div>
+    <div class="sub"><span class="${v.today ? 'late' : ''}">${v.today ? 'Today' : nice(v.date)}${v.time ? ' ' + esc(v.time) : ''}</span> · ${esc(v.owner)}${v.status !== 'Scheduled' ? ' · ' + esc(v.status) : ''}${v.address ? ' · ' + mapLink(v.address) : ''}${v.phone ? ` · <a href="tel:${esc(v.phone)}">call</a>` : ''}</div>
+    ${v.purpose ? `<div class="next">${esc(v.purpose)}</div>` : ''}
+    <div class="actions" id="${key}">
+      <div class="detail"><div class="dlabel">Where</div>${esc(v.address || '—')} ${mapLink(v.address)}<br><span class="sub">Booked by ${esc(v.by)}</span></div>
+      ${notesHtml(v.notes)}${histBtn(v.id)}
+      <div class="decide"><button type="button" class="small primary" onclick="call('visitEdit',['${id}',{status:'Done'}],'Marked done')">Done</button><button type="button" class="small" onclick="call('visitEdit',['${id}',{status:'Canceled'}],'Canceled')">Cancel visit</button></div>
+      <form class="edit" onsubmit="event.preventDefault();saveForm(this,'visitEdit','${id}')">
+        <label>Date<input type="date" name="date" value="${esc(v.date)}"></label>
+        <label>Time<input type="time" name="time" value="${esc(v.time)}"></label>
+        <label class="full">What it's for<textarea name="purpose" rows="2">${esc(v.purpose)}</textarea></label>
+        <label class="full">Address<input name="address" value="${esc(v.address)}"></label>
+        <label>Phone<input name="phone" value="${esc(v.phone)}"></label>
+        <label>Who's going<select name="owner">${opts(OWNERS.business, v.owner)}</select></label>
+        <label class="full">Add a note<input name="note" placeholder="What you found / measurements"></label>
+        <button class="small primary full">Save</button>
+      </form>
+    </div></div>
+    <button class="more" onclick="document.getElementById('${key}').classList.toggle('open')">⋯</button></div>`;
+}
+function addVisitForm() {
+  return `<details class="addbox"><summary>+ Book a site visit</summary><form class="edit" onsubmit="event.preventDefault();call('visitAdd',[{client:this.c.value,date:this.d.value,time:this.t.value,address:this.a.value,phone:this.p.value,purpose:this.w.value,owner:this.o.value}],'Booked (and added to the calendar)');this.reset()">
+    <label class="full">Client<input name="c" required placeholder="Name"></label>
+    <label>Date<input type="date" name="d" required value="${esc(DATA.today)}"></label>
+    <label>Time<input type="time" name="t"></label>
+    <label class="full">Address<input name="a"></label>
+    <label>Phone<input name="p"></label>
+    <label>Who's going<select name="o">${opts(OWNERS.business, 'Justin')}</select></label>
+    <label class="full">What it's for<textarea name="w" rows="2" placeholder="Estimate for… / check on…"></textarea></label>
+    <button class="small primary full">Book it</button></form></details>`;
+}
+
+/* ---------- Business tab ---------- */
+
+const TEAM = { who: '' };
+function bizHtml(b) {
+  if (!b || b.error) return errBox(b || { error: 'No data' });
+  const today = DATA.today, me = b.me;
+  const all = b.all || [];
+  const inbox = (b.inbox && b.inbox.items) || [], visits = b.visits || [];
+  const myTasks = all.filter(t => isMine(t.owner));
+  const myActive = myTasks.filter(t => t.state === 'active' || t.state === 'schedule');
+  const myReview = myTasks.filter(t => t.state === 'review');
+  const myWaiting = myTasks.filter(t => t.state === 'waiting');
+  const myParked = myTasks.filter(t => t.state === 'snoozed' || t.state === 'deferred');
+  const myFu = b.followups.filter(f => isMine(f.owner)), myLeads = b.leads.filter(l => isMine(l.owner));
+  const myInbox = inbox.filter(x => isMine(x.owner)), otherInbox = inbox.filter(x => !isMine(x.owner));
+  const myVisits = visits.filter(v => v.status === 'Scheduled');
+
+  /* Do next: top 5 across everything that is mine */
+  const cand = [];
+  myVisits.filter(v => v.today && isMine(v.owner)).forEach(v => cand.push({ s: 990, h: visitItem(v, 'Visit') }));
+  myInbox.forEach(x => cand.push({ s: x.ageH >= 24 ? 960 : 920, h: inboxItem(x, x.kind === 'Email lead' ? 'Lead' : 'Call/text') }));
+  myActive.forEach(t => cand.push({ s: t.score, h: taskItem('business', t, 'Task') }));
+  myFu.filter(f => f.due <= today).forEach(f => cand.push({ s: f.overdue ? 950 : 880, h: fuItem(f, 'Follow-up') }));
+  myLeads.filter(l => !l.next || l.next <= today).forEach(l => cand.push({ s: l.overdue ? 870 : 650, h: leadItem(l, 'Lead') }));
+  cand.sort((a, c) => c.s - a.s);
+  const doNext = cand.length ? cand.slice(0, 5).map(c => c.h).join('') : empty('Nothing urgent. Nice.');
+
+  /* Needs a decision: review tasks + things that are slipping (mine) */
+  const byId = {}; all.forEach(t => { byId[t.id] = t; });
+  const fuById = {}; b.followups.forEach(f => { fuById[f.id] = f; });
+  const leadById = {}; b.leads.forEach(l => { leadById[l.id] = l; });
+  const decisions = myReview.map(t => taskItem('business', t, 'Decide'));
+  (b.slipping || []).filter(x => isMine(x.owner)).forEach(x => {
+    if (x.kind === 'Follow-up' && fuById[x.id]) decisions.push(fuItem(Object.assign({}, fuById[x.id], { context: '⚠ ' + x.why }), 'Slipping'));
+    else if (x.kind === 'Lead' && leadById[x.id]) decisions.push(leadItem(Object.assign({}, leadById[x.id], { action: '⚠ ' + x.why + (leadById[x.id].action ? ' · ' + leadById[x.id].action : '') }), 'Slipping'));
+    else if (x.kind === 'Task' && byId[x.id] && byId[x.id].state !== 'review') decisions.push(taskItem('business', Object.assign({}, byId[x.id], { why: x.why }), 'Slipping'));
+  });
+
+  /* Team */
+  const others = b.people.filter(p => p !== me);
+  if (others.indexOf(TEAM.who) < 0) TEAM.who = others[0];
+  const tw = TEAM.who;
+  const theirs = all.filter(t => t.owner === tw && t.state !== 'snoozed' && t.state !== 'deferred');
+  const team = `<div class="pills">${others.map(p => { const n = all.filter(t => t.owner === p && (t.state === 'active' || t.state === 'review')).length; return `<button type="button" class="pill ${p === tw ? 'on' : ''}" onclick="TEAM.who='${p}';render()">${p} <span class="count">${n}</span></button>`; }).join('')}</div>` +
+    listBlock('team-' + tw, theirs, t => taskItem('business', t, t.state === 'waiting' ? 'Waiting' : ''), tw + ' has no open tasks.') +
+    (b.followups.filter(f => f.owner === tw).length ? '<h3>Follow-ups</h3>' + listBlock('teamfu-' + tw, b.followups.filter(f => f.owner === tw), f => fuItem(f)) : '');
+
+  /* Activity feed: what everyone else did */
+  let seen = ''; try { seen = localStorage.getItem('feedSeen') || ''; } catch (e) {}
+  const feed = (b.feed || []).filter(a => SHOW.feedMine || a.who !== me);
+  const fresh = feed.filter(a => a.time > seen).length;
+  const feedItem = a => `<div class="item"><div class="body"><div class="title">${a.time > seen ? '<span class="badge new">new</span> ' : ''}${esc(a.who)} · ${esc(a.action.replace(':', ' '))}: ${esc(a.title || a.id)}</div><div class="sub">${esc(a.when)} · ${esc(a.changes)}${a.undone ? ' · <i>undone ' + esc(a.undone) + '</i>' : ''}</div></div>${a.canUndo ? `<button class="small" onclick="if(this.dataset.ok){call('activityUndo',[${a.row}],'Undone')}else{this.dataset.ok=1;this.textContent='Sure? Undo'}">Undo</button>` : ''}</div>`;
+  const feedHtml = listBlock('feed', feed, feedItem, 'Nothing yet.', 8) + `<button type="button" class="link" onclick="SHOW.feedMine=${SHOW.feedMine ? 'false' : 'true'};render()">${SHOW.feedMine ? 'Hide my own changes' : 'Show my changes too (to undo them)'}</button> ` + (fresh ? `<button type="button" class="link" onclick="try{localStorage.setItem('feedSeen','${esc(feed[0].time)}')}catch(e){};render()">Mark all seen</button>` : '');
+
+  const cal2 = (b.calendar || []).filter(e => e.start.slice(0, 10) <= plus(1));
+  return card('Do next', null, doNext, 'wide hero') +
+    (decisions.length ? card('Needs a decision', decisions.length, listBlock('decide', decisions, h => h, ''), 'warnc') : '') +
+    card('Calls, texts &amp; leads', myInbox.length, listBlock('inbox', myInbox, x => inboxItem(x), 'Nothing new for you.') + (otherInbox.length ? `<details><summary>${otherInbox.length} for others</summary>${otherInbox.map(x => inboxItem(x)).join('')}</details>` : '')) +
+    card('My tasks', myActive.length, listBlock('mytasks', myActive, t => taskItem('business', t), 'Nothing on your list.') +
+      (myWaiting.length ? `<details><summary>Waiting on others (${myWaiting.length})</summary>${myWaiting.map(t => taskItem('business', t)).join('')}</details>` : '') +
+      (myParked.length ? `<details><summary>Snoozed / deferred (${myParked.length})</summary>${myParked.map(t => taskItem('business', t)).join('')}</details>` : '') + addTaskForm('business')) +
+    card('Site visits', myVisits.length, listBlock('visits', myVisits, v => visitItem(v), 'None booked.') + addVisitForm()) +
+    card('My follow-ups', myFu.length, listBlock('myfu', myFu, f => fuItem(f), 'No follow-ups this week.')) +
+    card('My leads', myLeads.length, listBlock('myleads', myLeads, l => leadItem(l), 'No leads to touch.')) +
+    card('Team', null, team, 'wide') +
+    card(`Activity${fresh ? ` <span class="badge new">${fresh} new</span>` : ''}`, null, feedHtml) +
+    card('Calendar (today &amp; tomorrow)', null, calHtml(cal2));
+}
+
+/* ---------- Health ---------- */
+
+function healthHtml(h) {
+  if (!h || h.error) return errBox(h || { error: 'No data' });
+  const jobs = h.jobs.length ? `<table><tr><th>Job</th><th>Last OK</th><th>Last error</th></tr>${h.jobs.map(j => `<tr><td>${esc(j.job)}</td><td>${esc(j.lastOk || '—')}</td><td class="${j.lastError ? 'err' : ''}">${esc(j.lastError || '—')}</td></tr>`).join('')}</table>` : empty('No runs logged yet.');
+  const recent = h.recent.map(r => `<div class="item"><div class="body"><div class="sub">${esc(r.time)} · ${esc(r.src)} · ${esc(r.action)} · <span class="${r.result === 'ERROR' ? 'err' : ''}">${esc(r.result)}</span></div><div class="next">${esc(r.item)}${r.detail ? ' — ' + esc(r.detail) : ''}</div></div></div>`).join('') || empty('Nothing logged.');
+  const loadErrs = ['home', 'business', 'reading'].filter(k => DATA[k] && DATA[k].error).map(k => `<div class="err">${k}: ${esc(DATA[k].error)}</div>`).join('');
+  return card('Automation health', null, jobs + (loadErrs ? '<h3>Load problems now</h3>' + loadErrs : '') +
+      `<form class="row" onsubmit="event.preventDefault()"><button class="small" onclick="call('retry',['reading'],'Reading refetched')">Retry reading</button><button class="small" onclick="call('retry',['email'],'Test email sent')">Send test email now</button></form>`) +
+    card('Recent activity', null, recent, 'wide');
+}
+
+HUB.boot();
+timer = setInterval(() => { if (!busy && !document.querySelector('.actions.open') && document.activeElement.tagName !== 'INPUT') load(); }, 5 * 60 * 1000);
+</script>
+</body>
+</html>
