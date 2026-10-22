@@ -650,12 +650,30 @@ const ASST = {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { this.open(); this.add('err', 'This browser can\'t listen. Type instead (Chrome works best).'); return; }
     if (window.speechSynthesis) speechSynthesis.cancel();
-    this.text = ''; this.holding = true; $('#mic').classList.add('rec'); this.open(); $('#asstLive').textContent = 'Listening…';
-    const r = new SR(); this.rec = r;
-    r.lang = 'en-US'; r.interimResults = true; r.continuous = true;
-    r.onresult = ev => { let fin = '', tmp = ''; for (let i = 0; i < ev.results.length; i++) { const t = ev.results[i][0].transcript; if (ev.results[i].isFinal) fin += t; else tmp += t; } this.text = (fin + ' ' + tmp).trim(); $('#asstLive').textContent = this.text || 'Listening…'; };
-    r.onerror = ev => { if (ev.error === 'not-allowed') this.add('err', 'Microphone is blocked. Allow the mic for this site in Chrome settings.'); };
-    r.onend = () => { $('#mic').classList.remove('rec'); const t = this.text; this.rec = null; if (this.holding) return; if (t) this.send(t); else $('#asstLive').textContent = ''; };
+    this.SR = SR; this.done = ''; this.part = ''; this.text = ''; this.holding = true;
+    $('#mic').classList.add('rec'); this.open(); $('#asstLive').textContent = 'Listening…';
+    this.listen();
+  },
+  /* one phrase per session (Android repeats itself in continuous mode); restart while the button is held */
+  listen() {
+    const r = new this.SR(); this.rec = r;
+    r.lang = 'en-US'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+    r.onresult = ev => {
+      let fin = '', tmp = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) { const t = ev.results[i][0].transcript.trim(); if (ev.results[i].isFinal) fin = t; else tmp = t; }
+      if (fin) { this.done = (this.done + ' ' + fin).trim(); this.part = ''; } else this.part = tmp;
+      this.text = (this.done + ' ' + this.part).trim();
+      $('#asstLive').textContent = this.text || 'Listening…';
+    };
+    r.onerror = ev => { if (ev.error === 'not-allowed') { this.holding = false; this.add('err', 'Microphone is blocked. Allow the mic for this site in Chrome settings.'); } };
+    r.onend = () => {
+      this.rec = null;
+      if (this.part) { this.done = (this.done + ' ' + this.part).trim(); this.part = ''; }
+      if (this.holding) { try { this.listen(); } catch (e) {} return; }
+      $('#mic').classList.remove('rec');
+      const t = this.done.trim();
+      if (t) this.send(t); else $('#asstLive').textContent = '';
+    };
     try { r.start(); } catch (e) { this.add('err', 'Could not start the mic: ' + e.message); }
   },
   stop() { this.holding = false; if (this.rec) { try { this.rec.stop(); } catch (e) {} } else $('#mic').classList.remove('rec'); },
