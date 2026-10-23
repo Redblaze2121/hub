@@ -117,6 +117,14 @@
   .dnx { border: 1px solid var(--line); border-radius: 10px; padding: 4px 10px 8px; margin: 2px 0 8px; }
   .dnx .xbar { display: flex; justify-content: space-between; align-items: center; padding-top: 4px; }
   .dnx .item { border-top: 0; }
+  .cam { position: fixed; inset: 0; z-index: 40; background: #000; display: none; flex-direction: column; }
+  .cam video { flex: 1; width: 100%; min-height: 0; object-fit: cover; }
+  .cam .cambar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px 26px; color: #fff; font-size: 14px; }
+  .cam .shutter { width: 74px; height: 74px; border-radius: 50%; border: 5px solid #fff; background: rgba(255,255,255,.25); flex: none; }
+  .cam .shutter:active { background: #fff; }
+  .cam .done { background: #fff; color: #000; border: 0; border-radius: 10px; padding: 10px 16px; font-size: 16px; }
+  .cam.flash video { opacity: .4; }
+  #upbar { position: fixed; left: 8px; bottom: 94px; z-index: 13; background: var(--ink); color: var(--bg); border-radius: 10px; padding: 8px 12px; font-size: 13px; display: none; }
   .card h2.fold { cursor: pointer; user-select: none; }
   .card h2.fold .arr { color: var(--quiet); font-weight: 400; margin-right: 4px; font-size: 12px; }
   @media (max-width: 720px) { .wide { grid-column: auto; } main { grid-template-columns: 1fr; } header h1 { display: none; } header { gap: 6px 8px; padding: 8px 12px; } header .meta { font-size: 12px; } header .spacer { display: none; } .tabs { width: 100%; } }
@@ -136,6 +144,7 @@
   <a class="voice" id="voicebtn" style="display:none" target="_blank" title="Talk to Claude about the hub (opens the Claude app)">Claude app ↗</a>
   <span class="meta" id="stamp">Loading…</span>
   <button class="small" onclick="load()" title="Refresh">↻</button>
+  <button class="small" id="healthBtn" onclick="setTab('health')" title="Automation health" style="display:none">♥</button>
 </header>
 <div class="reading" id="reading" style="display:none"></div>
 <main id="main"><div class="card">Loading…</div></main>
@@ -148,6 +157,8 @@
     <button class="small primary" id="lockBtn">Open</button>
   </form><p class="sub" id="lockErr" style="color:var(--warn)"></p></div></div>
 <footer class="foot"><button type="button" class="link" onclick="HUB.change()">Change passcode</button> · <button type="button" class="link" onclick="HUB.lock()">Lock this device</button></footer>
+<div id="upbar"></div>
+<div class="cam" id="cam"><video id="camv" playsinline muted autoplay></video><div class="cambar"><span id="camst">Starting camera…</span><button type="button" class="shutter" title="Take photo" onclick="CAM.snap()"></button><button type="button" class="done" onclick="CAM.close()">Done</button></div></div>
 <div class="asst" id="asst">
   <div class="bar"><span>Assistant · hold 🎙 to talk, or type</span><span><button type="button" class="link" onclick="ASST.toggleSpeak()" id="spk">🔈 off</button> · <button type="button" class="link" onclick="ASST.keyForm()">key</button> · <button type="button" class="link" onclick="ASST.close()">close</button></span></div>
   <div id="asstLog"></div>
@@ -229,8 +240,11 @@ const HUB = {
 window.google = { script: { get run() { return HUB.run(null, null); } } };
 
 let DATA = null, TAB = MODE === 'full' ? 'home' : 'business', busy = false, timer = null;
-const TABS = () => MODE === 'full' ? [['home', 'Home'], ['business', 'Business'], ['visits', 'Visits'], ['team', 'Team'], ['health', 'Health']] : [['business', 'Business'], ['visits', 'Visits'], ['team', 'Team']];
-try { const t = localStorage.getItem('hubTab'); if (t && TABS().some(x => x[0] === t)) TAB = t; } catch (e) {}
+const TABS = () => {
+  const st = DATA && DATA.business && DATA.business.stale, rv = st && st.left ? [['review', 'Review ' + st.left]] : [];
+  return (MODE === 'full' ? [['home', 'Home'], ['business', 'Business'], ['pipeline', 'Pipeline'], ['visits', 'Visits'], ['team', 'Team']] : [['business', 'Business'], ['pipeline', 'Pipeline'], ['visits', 'Visits'], ['team', 'Team']]).concat(rv);
+};
+try { const t = localStorage.getItem('hubTab'); if (t && (TABS().some(x => x[0] === t) || t === 'health' || t === 'review')) TAB = t; } catch (e) {}
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -243,7 +257,7 @@ function toast(msg, ms) { const t = $('#toast'); t.textContent = msg; t.style.di
 function load() {
   $('#stamp').textContent = 'Loading…';
   const slow = setTimeout(() => { $('#stamp').textContent = 'Still loading…'; if (!DATA) $('#main').innerHTML = '<div class="card">Still waiting on Google (first load of the day can take 20–30 seconds). If nothing appears in a minute, press Refresh.</div>'; }, 15000);
-  google.script.run.withSuccessHandler(d => { clearTimeout(slow); DATA = d; render(); $('#stamp').textContent = 'Updated ' + d.generated; })
+  google.script.run.withSuccessHandler(d => { clearTimeout(slow); DATA = d; render(); $('#stamp').textContent = 'Updated ' + String(d.generated).replace(/^.*, /, ''); $('#stamp').title = d.generated; })
     .withFailureHandler(e => { clearTimeout(slow); $('#stamp').textContent = 'Could not load'; $('#main').innerHTML = '<div class="card err">Could not load: ' + esc(e.message) + '</div>'; }).getData(KEY);
 }
 
@@ -262,7 +276,9 @@ function render() {
 
 function draw() {
   const tabs = TABS();
-  if (!tabs.some(t => t[0] === TAB)) TAB = tabs[0][0];
+  if (!tabs.some(t => t[0] === TAB) && !(TAB === 'health' && MODE === 'full')) TAB = tabs[0][0];
+  const hb = $('#healthBtn'), broken = DATA.health && DATA.health.jobs && DATA.health.jobs.some(j => j.broken);
+  hb.style.display = MODE === 'full' ? '' : 'none'; hb.textContent = broken ? '⚠ Health' : '♥'; hb.className = 'small' + (TAB === 'health' ? ' primary' : '');
   $('#tabs').innerHTML = tabs.map(([k, n]) => `<button class="tab ${TAB === k ? 'on' : ''}" onclick="setTab('${k}')">${n}</button>`).join('');
   const r = DATA.reading || {};
   $('#reading').style.display = DATA.reading && TAB === 'home' ? 'block' : 'none';
@@ -273,6 +289,8 @@ function draw() {
   if (TAB === 'home') m.innerHTML = homeHtml(DATA.home);
   else if (TAB === 'business') m.innerHTML = bizHtml(DATA.business);
   else if (TAB === 'visits') m.innerHTML = visitsHtml(DATA.business);
+  else if (TAB === 'pipeline') m.innerHTML = pipelineHtml(DATA.business);
+  else if (TAB === 'review') m.innerHTML = reviewHtml(DATA.business);
   else if (TAB === 'team') m.innerHTML = teamHtml(DATA.business);
   else m.innerHTML = healthHtml(DATA.health);
 }
@@ -292,10 +310,10 @@ function changed(form) {
   return f;
 }
 function opts(list, cur) { return list.map(o => `<option${String(o) === String(cur) ? ' selected' : ''}>${esc(o)}</option>`).join(''); }
-function saveForm(form, fn, a, b) {
+function saveForm(form, fn, a, b, msg) {
   const f = changed(form);
   if (!Object.keys(f).length) { toast('Nothing changed'); return; }
-  call(fn, b === undefined ? [a, f] : [a, b, f], 'Saved');
+  call(fn, b === undefined ? [a, f] : [a, b, f], msg || 'Saved');
 }
 const STATUSES = ['Open', 'In progress', 'Waiting', 'Deferred', 'Needs review', 'Done'];
 const STAGES = ['Initial Contact', 'Estimate', 'Estimate Follow-up 1', 'Estimate Follow-up 2', 'Scheduled', '30-60 Day Follow-up', 'Deferred', 'Won', 'Closed / Lost'];
@@ -448,15 +466,18 @@ function homeHtml(h) {
 
 /* ---------- Business: follow-ups, leads, inbox, visits ---------- */
 
+const isWin = f => /win-back|re-engage/i.test(f.type);
 function fuItem(f, tag) {
   const id = esc(f.id), key = 'f-' + id + (tag ? '-' + tag : '');
+  tag = tag || (isWin(f) ? (/re-engage/i.test(f.type) ? 'Re-engage' : 'Win-back') : '');
   return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
-    <div class="title">${tag ? badge(tag) + ' ' : ''}${esc(f.client)} <span class="sub">— ${esc(f.type)}</span></div>
+    <div class="title">${tag ? badge(tag) + ' ' : ''}${esc(f.client)} <span class="sub">— ${esc(/win-back/i.test(f.type) ? 'lost lead, one spring check-in' : /re-engage/i.test(f.type) ? 'stale client, one check-in' : f.type)}</span></div>
     <div class="sub"><span class="${f.overdue ? 'late' : ''}">${nice(f.due)}</span> · ${esc(f.owner || 'Unassigned')}${f.phone ? ` · <a href="tel:${esc(f.phone)}">call</a> · <a href="sms:${esc(f.phone)}">text</a>` : ''}${f.email ? ` · <a href="mailto:${esc(f.email)}">email</a>` : ''}</div>
     ${f.context ? `<div class="next">${esc(f.context)}</div>` : ''}
     ${f.recent ? `<div class="notes">Recent: ${esc(f.recent)}</div>` : ''}
     <div class="actions" id="${key}">
       ${notesHtml(f.notes)}${histBtn(f.id)}
+      ${isWin(f) ? `<div class="decide"><span class="sub">No interest or no answer?</span><button type="button" class="small primary" onclick="if(this.dataset.ok){call('followupEdit',['${id}',{archive:true}],'Archived — no more follow-ups')}else{this.dataset.ok=1;this.textContent='Sure? Archive'}">Archive</button></div>` : ''}
       <form class="edit" onsubmit="event.preventDefault();call('logFollowup',['${id}',this.m.value,this.o.value,this.n.value],'Follow-up logged')">
         <label>How<select name="m"><option>Call</option><option>Text</option><option>Email</option><option>In person</option></select></label>
         <label>Outcome<select name="o"><option>Happy</option><option>Issue to fix</option><option>New work</option><option>No answer</option><option>Not interested</option><option>Won</option><option>Lost</option></select></label>
@@ -479,16 +500,18 @@ function leadItem(l, tag) {
   const stages = STAGES.indexOf(l.stage) < 0 ? STAGES.concat([l.stage]) : STAGES;
   return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
     <div class="title">${tag ? badge(tag) + ' ' : ''}${esc(l.client)} <span class="sub">— ${esc(l.job)}</span></div>
-    <div class="sub">${l.next ? `<span class="${l.overdue ? 'late' : ''}">${nice(l.next)}</span> · ` : 'No date · '}${esc(l.stage)} · ${esc(l.owner || 'Unassigned')}</div>
+    <div class="sub">${l.next ? `<span class="${l.overdue ? 'late' : ''}">${nice(l.next)}</span> · ` : 'No date · '}${esc(l.stage)} · ${esc(l.owner || 'Unassigned')}${l.phone ? ` · <a href="tel:${esc(l.phone)}">call</a> · <a href="sms:${esc(l.phone)}">text</a>` : ''}${l.email ? ` · <a href="mailto:${esc(l.email)}">email</a>` : ''}</div>
     ${l.action ? `<div class="next">→ ${esc(l.action)}</div>` : ''}
     <div class="actions" id="${key}">
-      ${histBtn(l.id)}
-      <form class="edit" onsubmit="event.preventDefault();saveForm(this,'leadEdit','${id}')">
-        <label>Stage<select name="stage">${opts(stages, l.stage)}</select></label>
+      ${notesHtml(l.notes)}${histBtn(l.id)}
+      <form class="edit" onsubmit="event.preventDefault();saveForm(this,'leadEdit','${id}',undefined,/lost/i.test(this.stage.value)&&this.stage.value!==this.stage.dataset.was&&!this.archive.checked?'Saved — spring win-back added for Feb 1':'')">
+        <label>Stage<select name="stage" data-was="${esc(l.stage)}">${opts(stages, l.stage)}</select></label>
         <label>Next touch<input type="date" name="next" value="${esc(l.next)}"></label>
         <label>Owner<select name="owner">${optsV(OWNER_PAIRS(), l.owner)}</select></label>
         <label class="full">Next action<input name="action" value="${esc(l.action)}"></label>
         <label class="full"><input type="checkbox" name="touched" style="width:auto"> Contacted them today</label>
+        <label class="full">Add a note<input name="note" placeholder="What happened / why lost"></label>
+        <label class="full sub"><input type="checkbox" name="archive" style="width:auto"> If Lost: archive (no Feb 1 win-back)</label>
         <button class="small primary full">Save</button>
       </form>
     </div></div>
@@ -530,12 +553,13 @@ function visitItem(v, tag) {
   const id = esc(v.id), key = 'v-' + id + (tag ? '-' + tag : '');
   return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
     <div class="title">${tag ? badge(tag) + ' ' : ''}📍 ${esc(v.client)}</div>
-    <div class="sub"><span class="${v.today ? 'late' : ''}">${v.today ? 'Today' : nice(v.date)}${v.time ? ' ' + esc(v.time) : ''}</span> · ${esc(v.owner)}${v.status !== 'Scheduled' ? ' · ' + esc(v.status) : ''}${v.address ? ' · ' + mapLink(v.address) : ''}${v.phone ? ` · <a href="tel:${esc(v.phone)}">call</a>` : ''}</div>
+    <div class="sub"><span class="${v.today ? 'late' : ''}">${v.today ? 'Today' : nice(v.date)}${v.time ? ' ' + esc(v.time) : ''}</span> · ${esc(v.owner)}${v.photos ? ' · 📷' : ''}${v.status !== 'Scheduled' ? ' · ' + esc(v.status) : ''}${v.address ? ' · ' + mapLink(v.address) : ''}${v.phone ? ` · <a href="tel:${esc(v.phone)}">call</a>` : ''}</div>
     ${v.purpose ? `<div class="next">${esc(v.purpose)}</div>` : ''}
     <div class="actions" id="${key}">
       <div class="detail"><div class="dlabel">Where</div>${esc(v.address || '—')} ${mapLink(v.address)}<br><span class="sub">Booked by ${esc(v.by)}</span></div>
+      ${MODE === 'full' ? `<div class="decide"><button type="button" class="small primary" onclick="CAM.open('${id}')">📷 Camera</button><label style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px;background:var(--card)">Add photos<input type="file" accept="image/*" multiple style="display:none" onchange="CAM.files(this,'${id}')"></label>${v.photos ? `<a href="${esc(v.photos)}" target="_blank">Open photos ↗</a>` : '<span class="sub">no photos yet</span>'}</div>` : (v.photos ? `<a href="${esc(v.photos)}" target="_blank">Photos ↗</a>` : '')}
       ${notesHtml(v.notes)}${histBtn(v.id)}
-      <div class="decide"><button type="button" class="small primary" onclick="call('visitEdit',['${id}',{status:'Done'}],'Marked done')">Done</button><button type="button" class="small" onclick="call('visitEdit',['${id}',{status:'Canceled'}],'Canceled')">Cancel visit</button></div>
+      <div class="decide"><button type="button" class="small primary" onclick="call('visitEdit',['${id}',{status:'Done'}],'Done — quote step added')">Done</button><button type="button" class="small" onclick="call('visitEdit',['${id}',{status:'Canceled'}],'Canceled')">Cancel visit</button></div>
       <form class="edit" onsubmit="event.preventDefault();saveForm(this,'visitEdit','${id}')">
         <label>Date<input type="date" name="date" value="${esc(v.date)}"></label>
         <label>Time<input type="time" name="time" value="${esc(v.time)}"></label>
@@ -597,7 +621,7 @@ function priorityList(b, who) {
   b.followups.filter(f => mine(f.owner) && f.due <= DATA.today).forEach(f => {
     const n = daysLate(f.due), first = /new lead|call back/i.test(f.type);
     const s = first ? 1000 + n * 5 : n > 0 ? 830 + Math.min(n, 30) * 5 : 750;
-    add('f:' + f.id, s + (/estimate/i.test(f.type) ? 40 : 0), first ? 'Call back' : 'Follow-up', first ? 'hot' : '', f.client + (f.type ? ' — ' + f.type : ''), whenChip(f.due), first ? 'First contact' : '', () => fuItem(f));
+    add('f:' + f.id, s + (/estimate|quote/i.test(f.type) ? 40 : 0), first ? 'Call back' : isWin(f) ? (/re-engage/i.test(f.type) ? 'Re-engage' : 'Win-back') : /quote/i.test(f.type) ? 'Quote' : 'Follow-up', first ? 'hot' : '', f.client + (f.type ? ' — ' + f.type : ''), whenChip(f.due), first ? 'First contact' : '', () => fuItem(f));
   });
   (b.all || []).filter(t => mine(t.owner)).forEach(t => {
     if (t.state === 'review') return add('t:' + t.id, 800, 'Decide', 'dec', t.title, { t: 'Decide', late: false }, t.why, () => taskItem('business', t));
@@ -626,21 +650,124 @@ function dnBlock(list, key, n) {
 
 function bizHtml(b) {
   if (!b || b.error) return errBox(b || { error: 'No data' });
-  const all = b.all || [], inbox = (b.inbox && b.inbox.items) || [];
-  const myTasks = all.filter(t => isMine(t.owner));
+  const myTasks = (b.all || []).filter(t => isMine(t.owner));
   const myActive = myTasks.filter(t => t.state === 'active' || t.state === 'schedule');
   const myWaiting = myTasks.filter(t => t.state === 'waiting');
   const myParked = myTasks.filter(t => t.state === 'snoozed' || t.state === 'deferred');
-  const myFu = b.followups.filter(f => isMine(f.owner)), myLeads = b.leads.filter(l => isMine(l.owner));
-  const myInbox = inbox.filter(x => isMine(x.owner)), otherInbox = inbox.filter(x => !isMine(x.owner));
   const pl = priorityList(b, ME());
   return card('Do next', pl.length > 5 ? pl.length : null, dnBlock(pl, 'dn'), 'wide hero') +
-    (otherInbox.length ? card('Calls &amp; texts for the team', otherInbox.length, listBlock('inbox', otherInbox, x => inboxItem(x), ''), '', 'f-inbox') : '') +
     card('My tasks', myActive.length, listBlock('mytasks', myActive, t => taskItem('business', t), 'Nothing on your list.') +
       (myWaiting.length ? `<details><summary>Waiting on others (${myWaiting.length})</summary>${myWaiting.map(t => taskItem('business', t)).join('')}</details>` : '') +
-      (myParked.length ? `<details><summary>Snoozed / deferred (${myParked.length})</summary>${myParked.map(t => taskItem('business', t)).join('')}</details>` : '') + addTaskForm('business'), '', 'f-tasks') +
-    (myFu.length ? card('My follow-ups', myFu.length, listBlock('myfu', myFu, f => fuItem(f), ''), '', 'f-fu') : '') +
-    (myLeads.length ? card('My leads', myLeads.length, listBlock('myleads', myLeads, l => leadItem(l), ''), '', 'f-leads') : '');
+      (myParked.length ? `<details><summary>Snoozed / deferred (${myParked.length})</summary>${myParked.map(t => taskItem('business', t)).join('')}</details>` : '') + addTaskForm('business'), 'wide', 'f-tasks');
+}
+
+/* ---------- Pipeline tab: unanswered calls/texts on top, then leads, then follow-ups (win-backs last) ---------- */
+
+function pipelineHtml(b) {
+  if (!b || b.error) return errBox(b || { error: 'No data' });
+  const inbox = (b.inbox && b.inbox.items) || [];
+  const mineFirst = list => list.filter(x => isMine(x.owner)).concat(list.filter(x => !isMine(x.owner)));
+  const team = (list, label, fn) => list.length ? `<details><summary>${label} (${list.length})</summary>${list.map(fn).join('')}</details>` : '';
+  const myLeads = b.leads.filter(l => isMine(l.owner)), otherLeads = b.leads.filter(l => !isMine(l.owner));
+  const fus = b.followups.filter(f => !isWin(f)), wins = b.followups.filter(isWin);
+  const myFu = fus.filter(f => isMine(f.owner)), otherFu = fus.filter(f => !isMine(f.owner));
+  return (inbox.length ? card('Unanswered calls &amp; texts', inbox.length, listBlock('inbox', mineFirst(inbox), x => inboxItem(x), ''), 'wide warnc') : '') +
+    card('Leads', myLeads.length, listBlock('myleads', myLeads, l => leadItem(l), 'No leads for you to touch.') + team(otherLeads, "Team's leads", l => leadItem(l)), '', 'f-leads') +
+    card('Follow-ups', myFu.length, listBlock('myfu', myFu, f => fuItem(f), 'No follow-ups due soon.') + team(otherFu, "Team's follow-ups", f => fuItem(f)) +
+      (wins.length ? `<h3>Win-backs &amp; re-engage (one check-in each)</h3>${listBlock('wins', wins, f => fuItem(f), '', 3)}` : ''), '', 'f-fu');
+}
+
+/* ---------- photos: in-hub camera (stays open; every shot uploads to the visit's Drive folder) ---------- */
+
+const CAM = {
+  id: '', stream: null, queue: [], busy: false, sent: 0, failed: 0, err: '',
+  status() {
+    const left = this.queue.length + (this.busy ? 1 : 0);
+    const t = (this.sent ? this.sent + ' saved' : '') + (left ? (this.sent ? ' · ' : '') + left + ' uploading…' : '') + (this.failed ? ' · ' + this.failed + ' failed: ' + this.err : '');
+    $('#camst').textContent = t || 'Tap the circle to take a photo';
+    const bar = $('#upbar'); bar.textContent = '📷 ' + (t || ''); bar.style.display = t && $('#cam').style.display !== 'flex' && (left || this.failed) ? 'block' : 'none';
+  },
+  async open(id) {
+    this.id = id; this.sent = 0; this.failed = 0;
+    $('#cam').style.display = 'flex'; this.status();
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 4032 }, height: { ideal: 3024 } }, audio: false });
+      const v = $('#camv'); v.srcObject = this.stream; await v.play();
+    } catch (e) { $('#camst').textContent = 'Camera not available here (' + (e.message || e.name) + '). Use "Add photos" instead.'; }
+  },
+  async snap() {
+    if (!this.stream) return;
+    let blob = null;
+    try { if (window.ImageCapture) blob = await new ImageCapture(this.stream.getVideoTracks()[0]).takePhoto(); } catch (e) {}
+    if (!blob) {
+      const v = $('#camv'), c = document.createElement('canvas');
+      c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0);
+      blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+    }
+    $('#cam').classList.add('flash'); setTimeout(() => $('#cam').classList.remove('flash'), 120);
+    if (navigator.vibrate) navigator.vibrate(30);
+    this.add(blob);
+  },
+  files(input, id) { this.id = id; [...input.files].forEach(f => this.add(f)); input.value = ''; },
+  add(blob) { this.queue.push({ blob: blob, id: this.id, n: Date.now() }); this.status(); this.pump(); },
+  async shrink(blob) {
+    const img = await createImageBitmap(blob), max = 2400, k = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const out = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+    return await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(',')[1]); fr.readAsDataURL(out); });
+  },
+  async pump() {
+    if (this.busy || !this.queue.length) return;
+    this.busy = true; this.status();
+    const job = this.queue.shift();
+    try {
+      const b64 = await this.shrink(job.blob);
+      await new Promise((ok, no) => google.script.run.withSuccessHandler(ok).withFailureHandler(no).photoUpload(KEY, job.id, b64, 'image/jpeg', job.id + ' ' + new Date(job.n).toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.jpg'));
+      this.sent++;
+    } catch (e) { this.failed++; this.err = String((e && e.message) || e).slice(0, 80); }
+    this.busy = false; this.status();
+    if (this.queue.length) this.pump(); else if ($('#cam').style.display !== 'flex') { toast(this.sent + ' photo' + (this.sent === 1 ? '' : 's') + ' saved'); load(); }
+  },
+  close() {
+    if (this.stream) this.stream.getTracks().forEach(t => t.stop());
+    this.stream = null; $('#cam').style.display = 'none'; this.status();
+    if (!this.queue.length && !this.busy && this.sent) { toast(this.sent + ' photo' + (this.sent === 1 ? '' : 's') + ' saved'); load(); }
+  },
+};
+
+/* ---------- Review tab (temporary): stale clients, one decision each ---------- */
+
+const RV = { open: '', q: '' };
+function reviewHtml(b) {
+  const st = b && b.stale;
+  if (!st || st.error) return errBox(st || { error: 'No review list' });
+  const q = RV.q.toLowerCase();
+  const list = st.items.filter(x => !q || (x.name + ' ' + x.address + ' ' + x.email).toLowerCase().indexOf(q) >= 0);
+  const all = !!SHOW.rv, shown = all ? list : list.slice(0, 15);
+  const row = x => {
+    const on = RV.open === x.id, id = esc(x.id);
+    const btn = (d, label, cls) => `<button type="button" class="small ${cls || ''}" onclick="rvDo('${id}','${d}',this)">${label}</button>`;
+    return `<div class="dn ${on ? 'on' : ''}" onclick="RV.open=RV.open==='${id}'?'':'${id}';render()"><span class="nm">${esc(x.name)}</span><span class="dd">${x.last ? 'last ' + esc(x.last) : 'never booked'} · ${esc(x.paid)}</span></div>` +
+      (on ? `<div class="dnx"><div class="xbar"><span class="sub">${esc(x.visits)} visits · ${esc(x.paid)} paid</span><button type="button" class="small" onclick="RV.open='';render()">✕ Close</button></div>
+        <div class="detail">${esc(x.address)} ${mapLink(x.address)}<br>${x.phone ? `<a href="tel:${esc(x.phone)}">call</a> · <a href="sms:${esc(x.phone)}">text</a> · ` : ''}${x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : ''}${x.notes ? `<div class="notes">${esc(x.notes)}</div>` : ''}</div>
+        <form class="edit" id="rvf" onsubmit="event.preventDefault()">
+          <label>Who reaches out<select name="o">${optsV(OWNER_PAIRS(), ME())}</select></label>
+          <label>Note (optional)<input name="n" placeholder="Why / what to say"></label>
+        </form>
+        <div class="decide" style="margin-top:6px">${btn('now', 'Reach out now', 'primary')}${btn('spring', 'Feb 1 check-in')}${btn('active', 'Still a client')}${btn('archive', 'Archive')}${btn('dnc', 'Do not contact')}</div></div>` : '');
+  };
+  return card(`Review: stale clients <span class="count">${st.left} of ${st.total} left</span>`, null,
+    `<form class="row" onsubmit="event.preventDefault()"><input type="text" placeholder="Search name or street" value="${esc(RV.q)}" oninput="RV.q=this.value;clearTimeout(RV.t);RV.t=setTimeout(()=>{render();const i=document.querySelector('#main input[type=text]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},300)"></form>
+     <p class="sub">Most recently booked first. Tap a name, pick one choice; it drops off this list. "Reach out now" and "Feb 1 check-in" make a Re-engage follow-up.</p>` +
+    (shown.map(row).join('') || empty(st.left ? 'No matches.' : 'All reviewed. Nice.')) +
+    (list.length > 15 ? `<button type="button" class="link" onclick="SHOW.rv=${all ? 'false' : 'true'};render()">${all ? 'Show first 15' : 'Show all ' + list.length}</button>` : ''), 'wide hero');
+}
+function rvDo(id, d, el) {
+  const f = document.getElementById('rvf'), args = { owner: f ? f.o.value : '', note: f ? f.n.value : '' };
+  if (d === 'dnc' || d === 'archive') { if (!el.dataset.ok) { el.dataset.ok = 1; el.textContent = 'Sure? ' + el.textContent; return; } }
+  RV.open = '';
+  call('staleDecide', [id, d, args], { now: 'Re-engage follow-up added for today', spring: 'Feb 1 check-in added', active: 'Marked still a client', archive: 'Archived', dnc: 'Marked do not contact' }[d]);
 }
 
 /* ---------- Visits tab ---------- */
@@ -716,6 +843,8 @@ const ASST = {
     q = String(q || '').trim(); if (!q || this.busy) return;
     this.open(); this.add('you', '🗣 ' + q); $('#asstLive').textContent = 'Thinking…'; this.busy = true;
     const hist = this.hist.slice(-6);
+    const openEl = document.querySelector('.actions.open'), m = /(SV|OPP|FU|TASK|HOME|IN)-\d+/.exec((DN.open || '') + ' ' + (openEl ? openEl.id : ''));
+    const ctx = { open: m ? m[0] : '' };
     google.script.run.withSuccessHandler(r => {
       this.busy = false; $('#asstLive').textContent = '';
       this.add('', r.reply); this.say(r.reply);
@@ -726,7 +855,7 @@ const ASST = {
       const m = String(e.message || e);
       if (/NO_KEY/.test(m)) { this.add('err', 'The assistant is off until a Claude API key is added. Paste it below.'); $('#asstKey').style.display = 'flex'; }
       else this.add('err', m);
-    }).assist(KEY, q, hist);
+    }).assist(KEY, q, hist, ctx);
   },
   start() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
