@@ -103,7 +103,23 @@
   .asst .bar { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--quiet); }
   main { padding-bottom: 110px; }
   .warnc { border-color: var(--warn); background: var(--warn-soft); }
-  @media (max-width: 720px) { .wide { grid-column: auto; } main { grid-template-columns: 1fr; } }
+  .tabs { overflow-x: auto; max-width: 100%; scrollbar-width: none; } .tabs::-webkit-scrollbar { display: none; }
+  .tab { padding: 6px 11px; font-size: 14px; white-space: nowrap; }
+  .dn { display: flex; gap: 8px; align-items: center; padding: 9px 2px; border-top: 1px solid var(--line); cursor: pointer; }
+  .dn:first-child { border-top: 0; }
+  .dn.on { background: var(--accent-soft); border-radius: 8px; }
+  .dn .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+  .dn .dd { flex: none; font-size: 13px; color: var(--quiet); }
+  .dn .dd.late { color: var(--warn); font-weight: 600; }
+  .dn .badge { flex: none; }
+  .badge.hot { background: var(--warn); color: var(--bg); }
+  .badge.dec { background: var(--warn-soft); color: var(--warn); }
+  .dnx { border: 1px solid var(--line); border-radius: 10px; padding: 4px 10px 8px; margin: 2px 0 8px; }
+  .dnx .xbar { display: flex; justify-content: space-between; align-items: center; padding-top: 4px; }
+  .dnx .item { border-top: 0; }
+  .card h2.fold { cursor: pointer; user-select: none; }
+  .card h2.fold .arr { color: var(--quiet); font-weight: 400; margin-right: 4px; font-size: 12px; }
+  @media (max-width: 720px) { .wide { grid-column: auto; } main { grid-template-columns: 1fr; } header h1 { display: none; } header { gap: 6px 8px; padding: 8px 12px; } header .meta { font-size: 12px; } header .spacer { display: none; } .tabs { width: 100%; } }
   .lock { position: fixed; inset: 0; background: var(--bg); z-index: 20; display: flex; align-items: flex-start; justify-content: center; padding: 15vh 16px 0; }
   .lockbox { width: 100%; max-width: 360px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
   .lockbox form { display: grid; gap: 10px; } .lockbox input { font-size: 18px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
@@ -119,7 +135,7 @@
   <div class="spacer"></div>
   <a class="voice" id="voicebtn" style="display:none" target="_blank" title="Talk to Claude about the hub (opens the Claude app)">Claude app ↗</a>
   <span class="meta" id="stamp">Loading…</span>
-  <button class="small" onclick="load()">Refresh</button>
+  <button class="small" onclick="load()" title="Refresh">↻</button>
 </header>
 <div class="reading" id="reading" style="display:none"></div>
 <main id="main"><div class="card">Loading…</div></main>
@@ -213,7 +229,8 @@ const HUB = {
 window.google = { script: { get run() { return HUB.run(null, null); } } };
 
 let DATA = null, TAB = MODE === 'full' ? 'home' : 'business', busy = false, timer = null;
-try { const t = localStorage.getItem('hubTab'); if (t && (MODE === 'full' || t === 'business')) TAB = t; } catch (e) {}
+const TABS = () => MODE === 'full' ? [['home', 'Home'], ['business', 'Business'], ['visits', 'Visits'], ['team', 'Team'], ['health', 'Health']] : [['business', 'Business'], ['visits', 'Visits'], ['team', 'Team']];
+try { const t = localStorage.getItem('hubTab'); if (t && TABS().some(x => x[0] === t)) TAB = t; } catch (e) {}
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -244,16 +261,19 @@ function render() {
 }
 
 function draw() {
-  const tabs = MODE === 'full' ? [['home', 'Home'], ['business', 'Business'], ['health', 'Health']] : [['business', 'Business']];
+  const tabs = TABS();
+  if (!tabs.some(t => t[0] === TAB)) TAB = tabs[0][0];
   $('#tabs').innerHTML = tabs.map(([k, n]) => `<button class="tab ${TAB === k ? 'on' : ''}" onclick="setTab('${k}')">${n}</button>`).join('');
   const r = DATA.reading || {};
-  $('#reading').style.display = DATA.reading ? 'block' : 'none';
+  $('#reading').style.display = DATA.reading && TAB === 'home' ? 'block' : 'none';
   $('#reading').innerHTML = r.ok
     ? `Today's reading (${esc(r.date)}): <a href="${esc(r.url)}" target="_blank">${esc(r.passage)}</a>${r.bonus ? ' · Bonus: ' + esc(r.bonus) : ''}`
     : `Today's reading: <a href="${esc(r.url || 'https:\/\/valleycreek.plus/readingplan')}" target="_blank">open the reading plan</a> <span class="meta">(couldn't read today's entry)</span>`;
   const m = $('#main');
   if (TAB === 'home') m.innerHTML = homeHtml(DATA.home);
   else if (TAB === 'business') m.innerHTML = bizHtml(DATA.business);
+  else if (TAB === 'visits') m.innerHTML = visitsHtml(DATA.business);
+  else if (TAB === 'team') m.innerHTML = teamHtml(DATA.business);
   else m.innerHTML = healthHtml(DATA.health);
 }
 
@@ -282,7 +302,14 @@ const STAGES = ['Initial Contact', 'Estimate', 'Estimate Follow-up 1', 'Estimate
 const OWNERS = { home: ['Justin', 'Amy', 'Anyone'], business: ['Justin', 'Alex', 'Jeremy', 'Micah'] };
 
 
-function card(title, count, inner, cls) { return `<section class="card ${cls || ''}"><h2>${title}${count != null ? `<span class="count">${count}</span>` : ''}</h2>${inner}</section>`; }
+const FOLD = (() => { try { return JSON.parse(localStorage.getItem('hubFold') || '{}'); } catch (e) { return {}; } })();
+function fold(k) { FOLD[k] = !FOLD[k]; try { localStorage.setItem('hubFold', JSON.stringify(FOLD)); } catch (e) {} render(); }
+function card(title, count, inner, cls, key) {
+  const cnt = count != null ? `<span class="count">${count}</span>` : '';
+  if (!key) return `<section class="card ${cls || ''}"><h2>${title}${cnt}</h2>${inner}</section>`;
+  const shut = !!FOLD[key];
+  return `<section class="card ${cls || ''}"><h2 class="fold" onclick="fold('${key}')"><span><span class="arr">${shut ? '▸' : '▾'}</span>${title}</span>${cnt}</h2>${shut ? '' : inner}</section>`;
+}
 function empty(s) { return `<div class="empty">${s || 'Nothing here.'}</div>`; }
 function errBox(x) { return x && x.error ? `<section class="card"><div class="err">Couldn't load: ${esc(x.error)}</div></section>` : ''; }
 
@@ -534,73 +561,128 @@ function addVisitForm() {
     <button class="small primary full">Book it</button></form></details>`;
 }
 
+/* ---------- priority (one list, most urgent first) ---------- */
+/* First contact (missed calls, texts, new leads, call-backs) beats everything except a broken automation.
+ * Then visits today, overdue follow-ups/leads (more days late = higher), decisions, overdue tasks, due today, soon, priority. */
+const DN = { open: '' };
+function dnTog(k) { DN.open = DN.open === k ? '' : k; render(); }
+const daysLate = d => d ? Math.round((new Date(DATA.today + 'T12:00:00') - new Date(String(d).slice(0, 10) + 'T12:00:00')) / 864e5) : 0;
+function whenChip(d, none) {
+  if (!d) return { t: none || 'No date', late: !!none };
+  const n = daysLate(d);
+  if (n > 0) return { t: n + 'd late', late: true };
+  if (n === 0) return { t: 'Today', late: false };
+  if (n === -1) return { t: 'Tomorrow', late: false };
+  return { t: nice(d), late: false };
+}
+const ownerIs = (p, o) => p === 'Justin' ? (!o || o === 'Justin') : o === p;
+const openFirst = h => h.replace('class="actions"', 'class="actions open"');
+
+function priorityList(b, who) {
+  const out = [], mine = o => ownerIs(who, o);
+  const slip = {}; (b.slipping || []).forEach(x => { slip[x.id] = x.why; });
+  const add = (key, s, tag, cls, name, chip, why, full) => out.push({ key: key, s: s, tag: tag, cls: cls, name: name, chip: chip, why: why || slip[key.split(':')[1]] || '', full: full });
+  if (who === ME() && MODE === 'full' && DATA.health && DATA.health.jobs) DATA.health.jobs.filter(j => j.broken).forEach(j =>
+    add('fix:' + j.job, 1200, 'Fix', 'hot', 'Hub: "' + j.job + '" is failing', { t: 'Now', late: true }, j.lastError, () => `<div class="item"><div class="body"><div class="sub">${esc(j.lastError || '')}</div><button class="small primary" onclick="DN.open='';setTab('health')">Open Health</button></div></div>`));
+  ((b.inbox && b.inbox.items) || []).filter(x => mine(x.owner)).forEach(x =>
+    add('in:' + x.id, 1100 + Math.min(x.ageH || 0, 72), x.kind === 'Email lead' ? 'New lead' : x.kind, 'hot', x.name || x.from, { t: x.ageH >= 48 ? Math.round(x.ageH / 24) + 'd waiting' : x.ageH >= 1 ? x.ageH + 'h ago' : 'Just now', late: x.ageH >= 24 }, 'First contact', () => inboxItem(x)));
+  (b.visits || []).filter(v => v.today && v.status === 'Scheduled' && mine(v.owner)).forEach(v =>
+    add('v:' + v.id, 1050, 'Visit', '', v.client, { t: v.time || 'Today', late: false }, v.purpose, () => visitItem(v)));
+  b.leads.filter(l => mine(l.owner)).forEach(l => {
+    const first = /initial/i.test(l.stage), n = daysLate(l.next);
+    if (l.next && n < 0 && !(first && n >= -1)) return;
+    const s = first ? 1000 + Math.max(n, 0) * 5 : !l.next ? 700 : n > 0 ? 830 + Math.min(n, 30) * 5 : 760;
+    add('l:' + l.id, s + (/estimate/i.test(l.stage) ? 40 : 0), 'Lead', first ? 'hot' : '', l.client + (l.job ? ' — ' + l.job : ''), whenChip(l.next, 'No date'), first ? 'First contact' : '', () => leadItem(l));
+  });
+  b.followups.filter(f => mine(f.owner) && f.due <= DATA.today).forEach(f => {
+    const n = daysLate(f.due), first = /new lead|call back/i.test(f.type);
+    const s = first ? 1000 + n * 5 : n > 0 ? 830 + Math.min(n, 30) * 5 : 750;
+    add('f:' + f.id, s + (/estimate/i.test(f.type) ? 40 : 0), first ? 'Call back' : 'Follow-up', first ? 'hot' : '', f.client + (f.type ? ' — ' + f.type : ''), whenChip(f.due), first ? 'First contact' : '', () => fuItem(f));
+  });
+  (b.all || []).filter(t => mine(t.owner)).forEach(t => {
+    if (t.state === 'review') return add('t:' + t.id, 800, 'Decide', 'dec', t.title, { t: 'Decide', late: false }, t.why, () => taskItem('business', t));
+    if (t.state !== 'active' && t.state !== 'schedule') return;
+    const n = daysLate(t.due);
+    let s = t.due && n > 0 ? 780 + Math.min(n, 30) * 4 : t.due && n === 0 ? 720 : t.due && n >= -7 ? 600 + n * 20 : t.pri === 1 ? 450 : t.pri === 2 ? 300 : 100;
+    if (t.state === 'schedule') s -= 50;
+    add('t:' + t.id, s, 'Task', '', t.title, whenChip(t.due, ''), '', () => taskItem('business', t));
+  });
+  return out.sort((a, c) => c.s - a.s);
+}
+
+function dnRow(c) {
+  const on = DN.open === c.key, k = esc(c.key).replace(/'/g, '');
+  return `<div class="dn ${on ? 'on' : ''}" onclick="dnTog('${k}')"><span class="badge ${c.cls}">${esc(c.tag)}</span><span class="nm">${esc(c.name)}</span><span class="dd ${c.chip.late ? 'late' : ''}">${esc(c.chip.t)}</span></div>` +
+    (on ? `<div class="dnx"><div class="xbar"><span class="why"${c.why ? '' : ' style="visibility:hidden"'}>${esc(c.why || '-')}</span><button type="button" class="small" onclick="dnTog('')">✕ Close</button></div>${openFirst(c.full())}</div>` : '');
+}
+function dnBlock(list, key, n) {
+  if (!list.length) return empty('Nothing urgent. Nice.');
+  const all = !!SHOW[key], shown = all ? list : list.slice(0, n || 5);
+  if (DN.open && !shown.some(c => c.key === DN.open)) DN.open = '';
+  return shown.map(dnRow).join('') + (list.length > (n || 5) ? `<button type="button" class="link" onclick="SHOW['${key}']=${all ? 'false' : 'true'};render()">${all ? 'Show top 5' : 'Show ' + (list.length - (n || 5)) + ' more'}</button>` : '');
+}
+
 /* ---------- Business tab ---------- */
 
-const TEAM = { who: '' };
 function bizHtml(b) {
   if (!b || b.error) return errBox(b || { error: 'No data' });
-  const today = DATA.today, me = b.me;
-  const all = b.all || [];
-  const inbox = (b.inbox && b.inbox.items) || [], visits = b.visits || [];
+  const all = b.all || [], inbox = (b.inbox && b.inbox.items) || [];
   const myTasks = all.filter(t => isMine(t.owner));
   const myActive = myTasks.filter(t => t.state === 'active' || t.state === 'schedule');
-  const myReview = myTasks.filter(t => t.state === 'review');
   const myWaiting = myTasks.filter(t => t.state === 'waiting');
   const myParked = myTasks.filter(t => t.state === 'snoozed' || t.state === 'deferred');
   const myFu = b.followups.filter(f => isMine(f.owner)), myLeads = b.leads.filter(l => isMine(l.owner));
   const myInbox = inbox.filter(x => isMine(x.owner)), otherInbox = inbox.filter(x => !isMine(x.owner));
-  const myVisits = visits.filter(v => v.status === 'Scheduled');
+  const pl = priorityList(b, ME());
+  return card('Do next', pl.length > 5 ? pl.length : null, dnBlock(pl, 'dn'), 'wide hero') +
+    (otherInbox.length ? card('Calls &amp; texts for the team', otherInbox.length, listBlock('inbox', otherInbox, x => inboxItem(x), ''), '', 'f-inbox') : '') +
+    card('My tasks', myActive.length, listBlock('mytasks', myActive, t => taskItem('business', t), 'Nothing on your list.') +
+      (myWaiting.length ? `<details><summary>Waiting on others (${myWaiting.length})</summary>${myWaiting.map(t => taskItem('business', t)).join('')}</details>` : '') +
+      (myParked.length ? `<details><summary>Snoozed / deferred (${myParked.length})</summary>${myParked.map(t => taskItem('business', t)).join('')}</details>` : '') + addTaskForm('business'), '', 'f-tasks') +
+    (myFu.length ? card('My follow-ups', myFu.length, listBlock('myfu', myFu, f => fuItem(f), ''), '', 'f-fu') : '') +
+    (myLeads.length ? card('My leads', myLeads.length, listBlock('myleads', myLeads, l => leadItem(l), ''), '', 'f-leads') : '');
+}
 
-  /* Do next: top 5 across everything that is mine */
-  const cand = [];
-  myVisits.filter(v => v.today && isMine(v.owner)).forEach(v => cand.push({ s: 990, h: visitItem(v, 'Visit') }));
-  myInbox.forEach(x => cand.push({ s: x.ageH >= 24 ? 960 : 920, h: inboxItem(x, x.kind === 'Email lead' ? 'Lead' : 'Call/text') }));
-  myActive.forEach(t => cand.push({ s: t.score, h: taskItem('business', t, 'Task') }));
-  myFu.filter(f => f.due <= today).forEach(f => cand.push({ s: f.overdue ? 950 : 880, h: fuItem(f, 'Follow-up') }));
-  myLeads.filter(l => !l.next || l.next <= today).forEach(l => cand.push({ s: l.overdue ? 870 : 650, h: leadItem(l, 'Lead') }));
-  cand.sort((a, c) => c.s - a.s);
-  const doNext = cand.length ? cand.slice(0, 5).map(c => c.h).join('') : empty('Nothing urgent. Nice.');
+/* ---------- Visits tab ---------- */
 
-  /* Needs a decision: review tasks + things that are slipping (mine) */
-  const byId = {}; all.forEach(t => { byId[t.id] = t; });
-  const fuById = {}; b.followups.forEach(f => { fuById[f.id] = f; });
-  const leadById = {}; b.leads.forEach(l => { leadById[l.id] = l; });
-  const decisions = myReview.map(t => taskItem('business', t, 'Decide'));
-  (b.slipping || []).filter(x => isMine(x.owner)).forEach(x => {
-    if (x.kind === 'Follow-up' && fuById[x.id]) decisions.push(fuItem(Object.assign({}, fuById[x.id], { context: '⚠ ' + x.why }), 'Slipping'));
-    else if (x.kind === 'Lead' && leadById[x.id]) decisions.push(leadItem(Object.assign({}, leadById[x.id], { action: '⚠ ' + x.why + (leadById[x.id].action ? ' · ' + leadById[x.id].action : '') }), 'Slipping'));
-    else if (x.kind === 'Task' && byId[x.id] && byId[x.id].state !== 'review') decisions.push(taskItem('business', Object.assign({}, byId[x.id], { why: x.why }), 'Slipping'));
-  });
+function visitsHtml(b) {
+  if (!b || b.error) return errBox(b || { error: 'No data' });
+  const vs = b.visits || [];
+  const up = vs.filter(v => v.status === 'Scheduled' && !v.past), done = vs.filter(v => !(v.status === 'Scheduled' && !v.past));
+  let last = '', list = '';
+  up.forEach(v => { if (v.date !== last) { list += `<div class="day">${v.today ? 'Today' : nice(v.date)}</div>`; last = v.date; } list += visitItem(v); });
+  return card('Site visits', up.length, (list || empty('None booked.')) + addVisitForm(), 'wide hero') +
+    (done.length ? card('Recent (last 3 days)', done.length, done.map(v => visitItem(v)).join(''), '', 'f-vdone') : '') +
+    card('Calendar', null, calHtml(b.calendar), '', 'f-cal');
+}
 
-  /* Team */
-  const others = b.people.filter(p => p !== me);
-  if (others.indexOf(TEAM.who) < 0) TEAM.who = others[0];
-  const tw = TEAM.who;
-  const theirs = all.filter(t => t.owner === tw && t.state !== 'snoozed' && t.state !== 'deferred');
-  const team = `<div class="pills">${others.map(p => { const n = all.filter(t => t.owner === p && (t.state === 'active' || t.state === 'review')).length; return `<button type="button" class="pill ${p === tw ? 'on' : ''}" onclick="TEAM.who='${p}';render()">${p} <span class="count">${n}</span></button>`; }).join('')}</div>` +
-    listBlock('team-' + tw, theirs, t => taskItem('business', t, t.state === 'waiting' ? 'Waiting' : ''), tw + ' has no open tasks.') +
-    (b.followups.filter(f => f.owner === tw).length ? '<h3>Follow-ups</h3>' + listBlock('teamfu-' + tw, b.followups.filter(f => f.owner === tw), f => fuItem(f)) : '');
+/* ---------- Team tab ---------- */
 
-  /* Activity feed: what everyone else did */
+const TEAM = { who: '' };
+function teamHtml(b) {
+  if (!b || b.error) return errBox(b || { error: 'No data' });
+  const me = b.me, all = b.all || [], people = b.people;
+  if (people.indexOf(TEAM.who) < 0) TEAM.who = people.filter(p => p !== me)[0] || me;
+  const tw = TEAM.who, is = o => ownerIs(tw, o);
+  const cnt = p => priorityList(b, p).length;
+  const pills = `<div class="pills">${people.map(p => `<button type="button" class="pill ${p === tw ? 'on' : ''}" onclick="TEAM.who='${p}';DN.open='';render()">${p}${p === me ? ' (me)' : ''} <span class="count">${cnt(p)}</span></button>`).join('')}</div>`;
+  const pl = priorityList(b, tw);
+  const tasks = all.filter(t => is(t.owner) && t.state !== 'snoozed' && t.state !== 'deferred');
+  const fus = b.followups.filter(f => is(f.owner)), leads = b.leads.filter(l => is(l.owner));
+  const visits = (b.visits || []).filter(v => is(v.owner) && v.status === 'Scheduled' && !v.past);
+  const person = pills + '<h3>Most urgent</h3>' + dnBlock(pl, 'team-dn-' + tw) +
+    `<details><summary>All tasks (${tasks.length})</summary>${tasks.map(t => taskItem('business', t, t.state === 'waiting' ? 'Waiting' : '')).join('') || empty('None.')}</details>` +
+    (fus.length ? `<details><summary>Follow-ups (${fus.length})</summary>${fus.map(f => fuItem(f)).join('')}</details>` : '') +
+    (leads.length ? `<details><summary>Leads (${leads.length})</summary>${leads.map(l => leadItem(l)).join('')}</details>` : '') +
+    (visits.length ? `<details><summary>Site visits (${visits.length})</summary>${visits.map(v => visitItem(v)).join('')}</details>` : '');
+
   let seen = ''; try { seen = localStorage.getItem('feedSeen') || ''; } catch (e) {}
   const feed = (b.feed || []).filter(a => SHOW.feedMine || a.who !== me);
   const fresh = feed.filter(a => a.time > seen).length;
   const feedItem = a => `<div class="item"><div class="body"><div class="title">${a.time > seen ? '<span class="badge new">new</span> ' : ''}${esc(a.who)} · ${esc(a.action.replace(':', ' '))}: ${esc(a.title || a.id)}</div><div class="sub">${esc(a.when)} · ${esc(a.changes)}${a.undone ? ' · <i>undone ' + esc(a.undone) + '</i>' : ''}</div></div>${a.canUndo ? `<button class="small" onclick="if(this.dataset.ok){call('activityUndo',[${a.row}],'Undone')}else{this.dataset.ok=1;this.textContent='Sure? Undo'}">Undo</button>` : ''}</div>`;
   const feedHtml = listBlock('feed', feed, feedItem, 'Nothing yet.', 8) + `<button type="button" class="link" onclick="SHOW.feedMine=${SHOW.feedMine ? 'false' : 'true'};render()">${SHOW.feedMine ? 'Hide my own changes' : 'Show my changes too (to undo them)'}</button> ` + (fresh ? `<button type="button" class="link" onclick="try{localStorage.setItem('feedSeen','${esc(feed[0].time)}')}catch(e){};render()">Mark all seen</button>` : '');
-
-  const cal2 = (b.calendar || []).filter(e => e.start.slice(0, 10) <= plus(1));
-  return card('Do next', null, doNext, 'wide hero') +
-    (decisions.length ? card('Needs a decision', decisions.length, listBlock('decide', decisions, h => h, ''), 'warnc') : '') +
-    card('Calls, texts &amp; leads', myInbox.length, listBlock('inbox', myInbox, x => inboxItem(x), 'Nothing new for you.') + (otherInbox.length ? `<details><summary>${otherInbox.length} for others</summary>${otherInbox.map(x => inboxItem(x)).join('')}</details>` : '')) +
-    card('My tasks', myActive.length, listBlock('mytasks', myActive, t => taskItem('business', t), 'Nothing on your list.') +
-      (myWaiting.length ? `<details><summary>Waiting on others (${myWaiting.length})</summary>${myWaiting.map(t => taskItem('business', t)).join('')}</details>` : '') +
-      (myParked.length ? `<details><summary>Snoozed / deferred (${myParked.length})</summary>${myParked.map(t => taskItem('business', t)).join('')}</details>` : '') + addTaskForm('business')) +
-    card('Site visits', myVisits.length, listBlock('visits', myVisits, v => visitItem(v), 'None booked.') + addVisitForm()) +
-    card('My follow-ups', myFu.length, listBlock('myfu', myFu, f => fuItem(f), 'No follow-ups this week.')) +
-    card('My leads', myLeads.length, listBlock('myleads', myLeads, l => leadItem(l), 'No leads to touch.')) +
-    card('Team', null, team, 'wide') +
-    card(`Activity${fresh ? ` <span class="badge new">${fresh} new</span>` : ''}`, null, feedHtml) +
-    card('Calendar (today &amp; tomorrow)', null, calHtml(cal2));
+  return card('Team', null, person, 'wide hero') +
+    card(`Activity${fresh ? ` <span class="badge new">${fresh} new</span>` : ''}`, null, feedHtml, 'wide', 'f-feed');
 }
 
 /* ---------- Health ---------- */
@@ -687,7 +769,7 @@ const ASST = {
 })();
 
 HUB.boot();
-timer = setInterval(() => { if (!busy && !document.querySelector('.actions.open') && document.activeElement.tagName !== 'INPUT') load(); }, 5 * 60 * 1000);
+timer = setInterval(() => { if (!busy && !DN.open && !document.querySelector('.actions.open') && document.activeElement.tagName !== 'INPUT') load(); }, 5 * 60 * 1000);
 </script>
 </body>
 </html>
