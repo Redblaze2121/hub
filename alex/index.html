@@ -518,7 +518,7 @@ function leadItem(l, tag) {
     <button class="more" onclick="document.getElementById('${key}').classList.toggle('open')">⋯</button></div>`;
 }
 
-const KIND_ICON = { 'Missed call': '📞', 'Voicemail': '📼', 'Text': '💬', 'Email lead': '✉️', 'Call': '📞' };
+const KIND_ICON = { 'Missed call': '📞', 'Voicemail': '📼', 'Text': '💬', 'Email lead': '✉️', 'Call': '📞', 'Thumbtack lead': '📌' };
 function inboxItem(x, tag) {
   const id = esc(x.id), key = 'i-' + id + (tag ? '-' + tag : '');
   const who = x.name ? `${esc(x.name)} <span class="sub">${esc(x.from)}</span>` : esc(x.from);
@@ -526,10 +526,11 @@ function inboxItem(x, tag) {
     <div class="title">${tag ? badge(tag) + ' ' : ''}${KIND_ICON[x.kind] || '•'} ${who}</div>
     <div class="sub"><span class="${x.ageH >= 24 ? 'late' : ''}">${esc(x.when)}</span> · ${esc(x.kind)}${x.line ? ' · ' + esc(x.line) : ''} · ${esc(x.owner || 'Unassigned')}${x.match ? ' · ' + esc(x.match) : ''}${x.phone ? ` · <a href="tel:${esc(x.phone)}">call</a> · <a href="sms:${esc(x.phone)}">text</a>` : ''}${x.link ? ` · <a href="${esc(x.link)}" target="_blank">open</a>` : ''}</div>
     ${x.summary ? `<div class="next">${esc(x.summary)}</div>` : ''}
+    ${x.replied ? `<span class="why">↩ ${esc(x.replyNote || 'Replied')} — pick the next step</span>` : ''}
     <div class="actions" id="${key}">
       <form class="edit" onsubmit="event.preventDefault();call('inboxAction',['${id}','handled',{note:this.note.value}],'Marked handled')">
-        <label class="full">Note (optional)<input name="note" placeholder="What you did"></label>
-        <button class="small primary">Handled</button>
+        <label class="full">Note (optional)<input name="note" placeholder="${x.replied ? 'What was decided' : 'What you did'}"></label>
+        <button class="small primary">${x.replied ? 'Done — nothing more' : 'Handled'}</button>
         <button class="small" type="button" onclick="call('inboxAction',['${id}','ignore',{note:this.form.note.value}],'Marked not needed')">Not needed</button>
       </form>
       <form class="row" onsubmit="event.preventDefault();call('inboxAction',['${id}','assign',{owner:this.o.value}],'Handed over')">
@@ -608,8 +609,9 @@ function priorityList(b, who) {
   const add = (key, s, tag, cls, name, chip, why, full) => out.push({ key: key, s: s, tag: tag, cls: cls, name: name, chip: chip, why: why || slip[key.split(':')[1]] || '', full: full });
   if (who === ME() && MODE === 'full' && DATA.health && DATA.health.jobs) DATA.health.jobs.filter(j => j.broken).forEach(j =>
     add('fix:' + j.job, 1200, 'Fix', 'hot', 'Hub: "' + j.job + '" is failing', { t: 'Now', late: true }, j.lastError, () => `<div class="item"><div class="body"><div class="sub">${esc(j.lastError || '')}</div><button class="small primary" onclick="DN.open='';setTab('health')">Open Health</button></div></div>`));
-  ((b.inbox && b.inbox.items) || []).filter(x => mine(x.owner)).forEach(x =>
-    add('in:' + x.id, 1100 + Math.min(x.ageH || 0, 72), x.kind === 'Email lead' ? 'New lead' : x.kind, 'hot', x.name || x.from, { t: x.ageH >= 48 ? Math.round(x.ageH / 24) + 'd waiting' : x.ageH >= 1 ? x.ageH + 'h ago' : 'Just now', late: x.ageH >= 24 }, 'First contact', () => inboxItem(x)));
+  ((b.inbox && b.inbox.items) || []).filter(x => mine(x.owner)).forEach(x => x.replied ?
+    add('in:' + x.id, 790 + Math.min(x.ageH || 0, 48), 'Next step?', 'dec', x.name || x.from, { t: 'replied', late: x.ageH >= 48 }, x.replyNote, () => inboxItem(x)) :
+    add('in:' + x.id, 1100 + Math.min(x.ageH || 0, 72), x.kind === 'Email lead' ? 'New lead' : x.kind === 'Thumbtack lead' ? 'Thumbtack' : x.kind, 'hot', x.name || x.from, { t: x.ageH >= 48 ? Math.round(x.ageH / 24) + 'd waiting' : x.ageH >= 1 ? x.ageH + 'h ago' : 'Just now', late: x.ageH >= 24 }, 'First contact', () => inboxItem(x)));
   (b.visits || []).filter(v => v.today && v.status === 'Scheduled' && mine(v.owner)).forEach(v =>
     add('v:' + v.id, 1050, 'Visit', '', v.client, { t: v.time || 'Today', late: false }, v.purpose, () => visitItem(v)));
   b.leads.filter(l => mine(l.owner)).forEach(l => {
