@@ -518,8 +518,21 @@ function leadItem(l, tag) {
     <button class="more" onclick="document.getElementById('${key}').classList.toggle('open')">⋯</button></div>`;
 }
 
-const KIND_ICON = { 'Missed call': '📞', 'Voicemail': '📼', 'Text': '💬', 'Email lead': '✉️', 'Call': '📞', 'Thumbtack lead': '📌' };
+const KIND_ICON = { 'Missed call': '📞', 'Voicemail': '📼', 'Text': '💬', 'Email lead': '✉️', 'Call': '📞', 'Thumbtack lead': '📌', 'Email': '✉️', 'Visit suggestion': '📍' };
+function suggestItem(x) {
+  const id = esc(x.id), m = /^visit:(\d{4}-\d{2}-\d{2})(?:\|(\d{2}:\d{2}))?/.exec(x.link || '') || [];
+  return `<div class="item"><div class="body"><div class="title">📍 Book on-site: ${esc(x.name || x.from)}</div>
+    <div class="sub">${esc(nice(m[1] || ''))}${m[2] ? ' ' + esc(m[2]) : ''} · from your ${esc(x.line)}</div><div class="next">${esc(x.summary)}</div>
+    <form class="edit" onsubmit="event.preventDefault();call('inboxAction',['${id}','book',{client:this.c.value,date:this.d.value,time:this.t.value,purpose:this.p.value}],'On-site booked (and on the calendar)')">
+      <label class="full">Client<input name="c" value="${esc(x.name)}"></label>
+      <label>Date<input type="date" name="d" value="${esc(m[1] || '')}"></label><label>Time<input type="time" name="t" value="${esc(m[2] || '')}"></label>
+      <label class="full">What for<input name="p" placeholder="e.g. fix sprinkler leak"></label>
+      <button class="small primary">Book it</button>
+      <button type="button" class="small" onclick="call('inboxAction',['${id}','ignore',{note:'not a visit'}],'Dismissed')">Dismiss</button>
+    </form></div></div>`;
+}
 function inboxItem(x, tag) {
+  if (x.kind === 'Visit suggestion') return suggestItem(x);
   const id = esc(x.id), key = 'i-' + id + (tag ? '-' + tag : '');
   const who = x.name ? `${esc(x.name)} <span class="sub">${esc(x.from)}</span>` : esc(x.from);
   return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
@@ -609,7 +622,8 @@ function priorityList(b, who) {
   const add = (key, s, tag, cls, name, chip, why, full) => out.push({ key: key, s: s, tag: tag, cls: cls, name: name, chip: chip, why: why || slip[key.split(':')[1]] || '', full: full });
   if (who === ME() && MODE === 'full' && DATA.health && DATA.health.jobs) DATA.health.jobs.filter(j => j.broken).forEach(j =>
     add('fix:' + j.job, 1200, 'Fix', 'hot', 'Hub: "' + j.job + '" is failing', { t: 'Now', late: true }, j.lastError, () => `<div class="item"><div class="body"><div class="sub">${esc(j.lastError || '')}</div><button class="small primary" onclick="DN.open='';setTab('health')">Open Health</button></div></div>`));
-  ((b.inbox && b.inbox.items) || []).filter(x => mine(x.owner)).forEach(x => x.replied ?
+  ((b.inbox && b.inbox.items) || []).filter(x => mine(x.owner)).forEach(x => x.kind === 'Visit suggestion' ?
+    add('in:' + x.id, 1000, 'Book?', 'dec', x.name || x.from, whenChip(String(x.link || '').slice(6, 16)), 'You said you would come out', () => inboxItem(x)) : x.replied ?
     add('in:' + x.id, 790 + Math.min(x.ageH || 0, 48), 'Next step?', 'dec', x.name || x.from, { t: 'replied', late: x.ageH >= 48 }, x.replyNote, () => inboxItem(x)) :
     add('in:' + x.id, 1100 + Math.min(x.ageH || 0, 72), x.kind === 'Email lead' ? 'New lead' : x.kind === 'Thumbtack lead' ? 'Thumbtack' : x.kind, 'hot', x.name || x.from, { t: x.ageH >= 48 ? Math.round(x.ageH / 24) + 'd waiting' : x.ageH >= 1 ? x.ageH + 'h ago' : 'Just now', late: x.ageH >= 24 }, 'First contact', () => inboxItem(x)));
   (b.visits || []).filter(v => v.today && v.status === 'Scheduled' && mine(v.owner)).forEach(v =>
