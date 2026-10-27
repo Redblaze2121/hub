@@ -567,7 +567,7 @@ function visitItem(v, tag) {
   const id = esc(v.id), key = 'v-' + id + (tag ? '-' + tag : '');
   return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
     <div class="title">${tag ? badge(tag) + ' ' : ''}📍 ${esc(v.client)}</div>
-    <div class="sub"><span class="${v.today ? 'late' : ''}">${v.today ? 'Today' : nice(v.date)}${v.time ? ' ' + esc(v.time) : ''}</span> · ${esc(v.owner)}${v.photos ? ' · 📷' : ''}${v.status !== 'Scheduled' ? ' · ' + esc(v.status) : ''}${v.address ? ' · ' + mapLink(v.address) : ''}${v.phone ? ` · <a href="tel:${esc(v.phone)}">call</a>` : ''}</div>
+    <div class="sub"><span class="${v.today || (v.past && v.status === 'Scheduled') ? 'late' : ''}">${v.today ? 'Today' : nice(v.date)}${v.past && v.status === 'Scheduled' ? ' — tap Done if it happened' : ''}${v.time ? ' ' + esc(v.time) : ''}</span> · ${esc(v.owner)}${v.photos ? ' · 📷' : ''}${v.status !== 'Scheduled' ? ' · ' + esc(v.status) : ''}${v.address ? ' · ' + mapLink(v.address) : ''}${v.phone ? ` · <a href="tel:${esc(v.phone)}">call</a>` : ''}</div>
     ${v.purpose ? `<div class="next">${esc(v.purpose)}</div>` : ''}
     <div class="actions" id="${key}">
       <div class="detail"><div class="dlabel">Where</div>${esc(v.address || '—')} ${mapLink(v.address)}<br><span class="sub">Booked by ${esc(v.by)}</span></div>
@@ -791,11 +791,11 @@ function rvDo(id, d, el) {
 function visitsHtml(b) {
   if (!b || b.error) return errBox(b || { error: 'No data' });
   const vs = b.visits || [];
-  const up = vs.filter(v => v.status === 'Scheduled' && !v.past), done = vs.filter(v => !(v.status === 'Scheduled' && !v.past));
+  const up = vs.filter(v => v.status === 'Scheduled'), done = vs.filter(v => v.status !== 'Scheduled');
   let last = '', list = '';
-  up.forEach(v => { if (v.date !== last) { list += `<div class="day">${v.today ? 'Today' : nice(v.date)}</div>`; last = v.date; } list += visitItem(v); });
+  up.forEach(v => { const h = v.past ? 'Not marked done yet' : v.today ? 'Today' : nice(v.date); if (h !== last) { list += `<div class="day">${h}</div>`; last = h; } list += visitItem(v); });
   return card('Site visits', up.length, (list || empty('None booked.')) + addVisitForm(), 'wide hero') +
-    (done.length ? card('Recent (last 3 days)', done.length, done.map(v => visitItem(v)).join(''), '', 'f-vdone') : '') +
+    (done.length ? card('Done (last 3 days)', done.length, done.map(v => visitItem(v)).join(''), '', 'f-vdone') : '') +
     card('Calendar', null, calHtml(b.calendar), '', 'f-cal');
 }
 
@@ -812,7 +812,7 @@ function teamHtml(b) {
   const pl = priorityList(b, tw);
   const tasks = all.filter(t => is(t.owner) && t.state !== 'snoozed' && t.state !== 'deferred');
   const fus = b.followups.filter(f => is(f.owner)), leads = b.leads.filter(l => is(l.owner));
-  const visits = (b.visits || []).filter(v => is(v.owner) && v.status === 'Scheduled' && !v.past);
+  const visits = (b.visits || []).filter(v => is(v.owner) && v.status === 'Scheduled');
   const person = pills + '<h3>Most urgent</h3>' + dnBlock(pl, 'team-dn-' + tw) +
     `<details><summary>All tasks (${tasks.length})</summary>${tasks.map(t => taskItem('business', t, t.state === 'waiting' ? 'Waiting' : '')).join('') || empty('None.')}</details>` +
     (fus.length ? `<details><summary>Follow-ups (${fus.length})</summary>${fus.map(f => fuItem(f)).join('')}</details>` : '') +
