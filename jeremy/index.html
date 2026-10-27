@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Wright Hub</title>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --ink: #1f2420; --quiet: #6b716c; --line: #e3e1da;
+    --accent: #2e6b45; --accent-soft: #e6f0e9; --warn: #a3471f; --warn-soft: #fbece6; --soc: #5b4bb7; --soc-soft: #efedff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #171a18; --card: #202522; --ink: #e9ece8; --quiet: #9aa29c; --line: #333a35;
+      --accent: #7cc497; --accent-soft: #24352a; --warn: #f0926b; --warn-soft: #3a2721; --soc: #b3a8ff; --soc-soft: #2b2840; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.4 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  .tabs { display: flex; gap: 4px; }
+  .tab { border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 8px 16px; border-radius: 999px; font-size: 15px; cursor: pointer; }
+  .tab.on { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .spacer { flex: 1; }
+  .meta { color: var(--quiet); font-size: 13px; }
+  button.small { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 8px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+  button.small:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .reading { margin: 12px 16px 0; padding: 10px 14px; background: var(--accent-soft); border-radius: 10px; font-size: 15px; }
+  .reading a { color: var(--accent); font-weight: 600; }
+  .test { background: var(--warn-soft); color: var(--warn); padding: 6px 16px; font-size: 13px; }
+  main { padding: 12px 16px 40px; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); align-items: start; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+  .card h2 { font-size: 15px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
+  .card h2 .count { color: var(--quiet); font-weight: 400; font-size: 13px; }
+  .card h3 { font-size: 13px; margin: 12px 0 4px; color: var(--quiet); text-transform: uppercase; letter-spacing: .04em; }
+  .item { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); align-items: flex-start; }
+  .item:first-of-type { border-top: 0; }
+  .item input[type=checkbox] { width: 22px; height: 22px; margin-top: 1px; accent-color: var(--accent); flex: none; cursor: pointer; }
+  .body { flex: 1; min-width: 0; }
+  .title { font-weight: 500; overflow-wrap: anywhere; }
+  .title.p1 { font-weight: 700; }
+  .sub { color: var(--quiet); font-size: 13px; overflow-wrap: anywhere; }
+  .next { font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+  .late { color: var(--warn); font-weight: 600; }
+  .why { display: inline-block; background: var(--warn-soft); color: var(--warn); border-radius: 6px; padding: 0 6px; font-size: 12px; margin-top: 2px; }
+  .more { background: none; border: 0; color: var(--quiet); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; }
+  .actions { display: none; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
+  .actions.open { display: flex; }
+  .actions input, .actions select, form.row input, form.row select { font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+  .day { font-weight: 700; margin: 10px 0 2px; font-size: 14px; }
+  .ev { display: flex; gap: 8px; padding: 4px 0; font-size: 15px; }
+  .ev .t { width: 70px; flex: none; color: var(--quiet); font-size: 13px; padding-top: 1px; }
+  .ev.social .title { color: var(--soc); }
+  .ev .cal { color: var(--quiet); font-size: 12px; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--soc-soft); color: var(--soc); font-size: 12px; }
+  form.row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  form.row input[type=text] { flex: 1; min-width: 140px; }
+  .empty { color: var(--quiet); font-size: 14px; padding: 4px 0; }
+  .err { color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  td, th { overflow-wrap: anywhere; }
+  form.edit { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; width: 100%; }
+  form.edit .full { grid-column: 1 / -1; }
+  form.edit input, form.edit select, form.edit textarea { font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; }
+  form.edit label { font-size: 12px; color: var(--quiet); display: block; }
+  .notes { font-size: 12px; color: var(--quiet); margin-top: 2px; overflow-wrap: anywhere; }
+  td, th { text-align: left; padding: 4px 6px; border-top: 1px solid var(--line); vertical-align: top; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; display: none; z-index: 10; max-width: 90vw; }
+  details summary { cursor: pointer; color: var(--quiet); font-size: 13px; margin-top: 8px; }
+  a { color: var(--accent); }
+  .wide { grid-column: span 2; }
+  .link { background: none; border: 0; color: var(--accent); font-size: 13px; padding: 6px 0; cursor: pointer; text-decoration: underline; }
+  .tap { cursor: pointer; }
+  .detail { width: 100%; font-size: 14px; background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+  .detail.instr { white-space: pre-wrap; border-left: 3px solid var(--accent); }
+  .dlabel { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--quiet); margin-bottom: 2px; }
+  .nline { padding: 3px 0; border-top: 1px dashed var(--line); font-size: 13px; overflow-wrap: anywhere; }
+  .nline:first-of-type { border-top: 0; }
+  .decide { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; width: 100%; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); vertical-align: 1px; }
+  .badge.new { background: var(--warn-soft); color: var(--warn); }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+  .pill { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 5px 12px; font-size: 14px; cursor: pointer; }
+  .pill.on { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .pill .count { opacity: .7; font-size: 12px; }
+  .hero { border-color: var(--accent); border-width: 2px; }
+  .hero h2 { font-size: 17px; }
+  details.addbox { margin-top: 10px; } details.addbox summary { color: var(--accent); font-size: 14px; font-weight: 600; }
+  form.edit textarea { resize: vertical; }
+  .voice { text-decoration: none; border: 1px solid var(--accent); color: var(--accent); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
+  .mic { position: fixed; right: 16px; bottom: 18px; z-index: 15; width: 66px; height: 66px; border-radius: 50%; border: 0; background: var(--accent); color: var(--bg); font-size: 28px; box-shadow: 0 4px 14px rgba(0,0,0,.25); cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .mic.rec { background: var(--warn); transform: scale(1.12); }
+  .asst { position: fixed; left: 8px; right: 8px; bottom: 94px; z-index: 14; max-width: 560px; margin-left: auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.2); padding: 10px 12px; display: none; max-height: 45vh; overflow: auto; }
+  .asst.open { display: block; }
+  .asst .msg { font-size: 14px; padding: 4px 0; overflow-wrap: anywhere; }
+  .asst .msg.you { color: var(--quiet); }
+  .asst .msg.err { color: var(--warn); }
+  .asst .live { font-style: italic; color: var(--accent); min-height: 1.2em; }
+  .asst form { display: flex; gap: 6px; margin-top: 6px; }
+  .asst form input { flex: 1; min-width: 0; font-size: 15px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+  .asst .bar { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--quiet); }
+  main { padding-bottom: 110px; }
+  .warnc { border-color: var(--warn); background: var(--warn-soft); }
+  .tabs { overflow-x: auto; max-width: 100%; scrollbar-width: none; } .tabs::-webkit-scrollbar { display: none; }
+  .tab { padding: 6px 11px; font-size: 14px; white-space: nowrap; }
+  .dn { display: flex; gap: 8px; align-items: center; padding: 9px 2px; border-top: 1px solid var(--line); cursor: pointer; }
+  .dn:first-child { border-top: 0; }
+  .dn.on { background: var(--accent-soft); border-radius: 8px; }
+  .dn .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+  .dn .dd { flex: none; font-size: 13px; color: var(--quiet); }
+  .dn .dd.late { color: var(--warn); font-weight: 600; }
+  .dn .badge { flex: none; }
+  .badge.hot { background: var(--warn); color: var(--bg); }
+  .badge.dec { background: var(--warn-soft); color: var(--warn); }
+  .dnx { border: 1px solid var(--line); border-radius: 10px; padding: 4px 10px 8px; margin: 2px 0 8px; }
+  .dnx .xbar { display: flex; justify-content: space-between; align-items: center; padding-top: 4px; }
+  .dnx .item { border-top: 0; }
+  .cam { position: fixed; inset: 0; z-index: 40; background: #000; display: none; flex-direction: column; }
+  .cam video { flex: 1; width: 100%; min-height: 0; object-fit: cover; }
+  .cam .cambar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px 26px; color: #fff; font-size: 14px; }
+  .cam .shutter { width: 74px; height: 74px; border-radius: 50%; border: 5px solid #fff; background: rgba(255,255,255,.25); flex: none; }
+  .cam .shutter:active { background: #fff; }
+  .cam .done { background: #fff; color: #000; border: 0; border-radius: 10px; padding: 10px 16px; font-size: 16px; }
+  .cam.flash video { opacity: .4; }
+  #upbar { position: fixed; left: 8px; bottom: 94px; z-index: 13; background: var(--ink); color: var(--bg); border-radius: 10px; padding: 8px 12px; font-size: 13px; display: none; }
+  .card h2.fold { cursor: pointer; user-select: none; }
+  .card h2.fold .arr { color: var(--quiet); font-weight: 400; margin-right: 4px; font-size: 12px; }
+  @media (max-width: 720px) { .wide { grid-column: auto; } main { grid-template-columns: 1fr; } header h1 { display: none; } header { gap: 6px 8px; padding: 8px 12px; } header .meta { font-size: 12px; } header .spacer { display: none; } .tabs { width: 100%; } }
+  .lock { position: fixed; inset: 0; background: var(--bg); z-index: 20; display: flex; align-items: flex-start; justify-content: center; padding: 15vh 16px 0; }
+  .lockbox { width: 100%; max-width: 360px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .lockbox form { display: grid; gap: 10px; } .lockbox input { font-size: 18px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
+  .lockbox button { font-size: 16px; padding: 10px; }
+  .foot { text-align: center; padding: 0 16px 30px; color: var(--quiet); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="test" id="testbanner" style="display:none">TEST build — reads and writes the (TEST) copies only. Your live sheets are not touched.</div>
+<header>
+  <h1>Wright Hub</h1>
+  <div class="tabs" id="tabs"></div>
+  <div class="spacer"></div>
+  <a class="voice" id="voicebtn" style="display:none" target="_blank" title="Talk to Claude about the hub (opens the Claude app)">Claude app ↗</a>
+  <span class="meta" id="stamp">Loading…</span>
+  <button class="small" onclick="load()" title="Refresh">↻</button>
+  <button class="small" id="healthBtn" onclick="setTab('health')" title="Automation health" style="display:none">♥</button>
+</header>
+<div class="reading" id="reading" style="display:none"></div>
+<main id="main"><div class="card">Loading…</div></main>
+<div id="toast"></div>
+<div id="lock" class="lock" style="display:none"><div class="lockbox">
+  <h2 id="lockTitle">Wright Hub</h2><p id="lockMsg" class="sub">Enter your passcode.</p>
+  <form id="lockForm" onsubmit="event.preventDefault();HUB.submit(this)">
+    <input type="password" name="p1" id="p1" autocomplete="current-password" placeholder="Passcode" required>
+    <input type="password" name="p2" id="p2" autocomplete="new-password" placeholder="Type it again" style="display:none">
+    <button class="small primary" id="lockBtn">Open</button>
+  </form><p class="sub" id="lockErr" style="color:var(--warn)"></p></div></div>
+<footer class="foot"><button type="button" class="link" onclick="HUB.change()">Change passcode</button> · <button type="button" class="link" onclick="HUB.lock()">Lock this device</button></footer>
+<div id="upbar"></div>
+<div class="cam" id="cam"><video id="camv" playsinline muted autoplay></video><div class="cambar"><span id="camst">Starting camera…</span><button type="button" class="shutter" title="Take photo" onclick="CAM.snap()"></button><button type="button" class="done" onclick="CAM.close()">Done</button></div></div>
+<div class="asst" id="asst">
+  <div class="bar"><span>Assistant · hold 🎙 to talk, or type</span><span><button type="button" class="link" onclick="ASST.toggleSpeak()" id="spk">🔈 off</button> · <button type="button" class="link" onclick="ASST.keyForm()">key</button> · <button type="button" class="link" onclick="ASST.close()">close</button></span></div>
+  <div id="asstLog"></div>
+  <div class="live" id="asstLive"></div>
+  <form onsubmit="event.preventDefault();ASST.send(this.q.value);this.reset()"><input name="q" placeholder="e.g. push Brianna to next Friday" autocomplete="off"><button class="small primary">Send</button></form>
+  <form id="asstKey" style="display:none" onsubmit="event.preventDefault();ASST.saveKey(this.k.value);this.reset()"><input name="k" type="password" placeholder="Paste Claude API key (sk-ant-…)" autocomplete="off"><button class="small primary">Save key</button></form>
+</div>
+<button type="button" class="mic" id="mic" title="Hold to talk to the assistant" oncontextmenu="return false">🎙</button>
+
+<script>
+let MODE = 'business';
+let KEY = '';
+/* ---- github.io version: talk to the Google script with fetch, no Google login ---- */
+const HUB = {
+  who: 'jeremy', url: 'https://script.google.com/macros/s/AKfycbzNL06O_xj2zDSE9HBCRrnLyAxiwqpDqTPgbvGzgxpkbrnvVYUApWNHkYCZrhzMRBSk_Q/exec', mem: '',
+  get pass() { try { return localStorage.getItem('hubPass:' + this.who) || ''; } catch (e) { return this.mem; } },
+  set pass(v) { this.mem = v; try { if (v) localStorage.setItem('hubPass:' + this.who, v); else localStorage.removeItem('hubPass:' + this.who); } catch (e) {} },
+  post(fn, args) {
+    return fetch(this.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args }), credentials: 'omit', redirect: 'follow', cache: 'no-store' })
+      .then(r => r.text()).then(t => { try { return JSON.parse(t); } catch (e) { return { ok: false, error: 'Google sent an unexpected reply. Try again in a minute.' }; } },
+        () => ({ ok: false, error: 'Could not reach Google. Check your connection and try again.' }));
+  },
+  show(mode, msg, err) {
+    this.mode = mode;
+    $('#lock').style.display = 'flex';
+    $('#lockTitle').textContent = mode === 'setup' ? 'Create your passcode' : mode === 'change' ? 'New passcode' : 'Wright Hub';
+    $('#lockMsg').textContent = msg || (mode === 'setup' ? 'Pick a passcode (6+ characters). This device will remember it.' : 'Enter your passcode.');
+    $('#p2').style.display = mode === 'enter' ? 'none' : 'block';
+    $('#p2').required = mode !== 'enter';
+    $('#lockBtn').textContent = mode === 'enter' ? 'Open' : 'Save passcode';
+    $('#lockErr').textContent = err || '';
+    $('#p1').value = ''; $('#p2').value = '';
+    setTimeout(() => $('#p1').focus(), 50);
+  },
+  hide() { $('#lock').style.display = 'none'; },
+  start(pass) { this.pass = pass; KEY = 'p:' + pass; this.hide(); load(); },
+  submit(f) {
+    const p1 = f.p1.value.trim(), p2 = f.p2.value.trim();
+    if (this.mode === 'enter') { this.start(p1); return; }
+    if (p1.length < 6) { $('#lockErr').textContent = 'Use at least 6 characters.'; return; }
+    if (p1 !== p2) { $('#lockErr').textContent = 'The two entries don\'t match.'; return; }
+    const auth = this.mode === 'setup' ? this.setupKey : KEY;
+    $('#lockBtn').disabled = true;
+    this.post('setPasscode', [auth, p1]).then(r => {
+      $('#lockBtn').disabled = false;
+      if (!r.ok) { $('#lockErr').textContent = 'Not saved: ' + r.error; return; }
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+      this.start(p1); toast('Passcode saved');
+    });
+  },
+  change() { if (!KEY) return; this.show('change', 'Pick a new passcode (6+ characters). Other devices will need the new one.'); },
+  lock() { this.pass = ''; KEY = ''; DATA = null; $('#main').innerHTML = ''; this.show('enter', 'Locked. Enter your passcode to open.'); },
+  boot() {
+    const m = /^#setup=([A-Za-z0-9]{32,})$/.exec(location.hash || '');
+    if (m) { this.setupKey = m[1]; this.show('setup'); return; }
+    if (this.pass) this.start(this.pass); else this.show('enter');
+  },
+  run(ok, fail) {
+    const self = this;
+    return new Proxy({}, { get(t, name) {
+      if (name === 'withSuccessHandler') return f => self.run(f, fail);
+      if (name === 'withFailureHandler') return f => self.run(ok, f);
+      return (...args) => self.post(name, args).then(r => {
+        if (r.ok) {
+          if (name === 'getData' && r.result) {
+            MODE = r.result.mode || 'business';
+            $('#testbanner').style.display = r.result.test ? 'block' : 'none';
+            const v = $('#voicebtn'); if (r.result.voice) { v.href = r.result.voice; v.style.display = ''; } else v.style.display = 'none';
+          }
+          if (ok) ok(r.result);
+        } else {
+          if (/Not authorized/.test(r.error)) { self.pass = ''; KEY = ''; self.show('enter', '', 'That passcode didn\'t work (or it was changed).'); }
+          if (fail) fail({ message: r.error });
+        }
+      });
+    } });
+  },
+};
+window.google = { script: { get run() { return HUB.run(null, null); } } };
+
+let DATA = null, TAB = MODE === 'full' ? 'home' : 'business', busy = false, timer = null;
+const TABS = () => {
+  const st = DATA && DATA.business && DATA.business.stale, rv = MODE === 'full' && st && st.left ? [['review', 'Review ' + st.left]] : [];   /* stale-client review is Justin's only */
+  if (DATA && DATA.crew) return [['business', 'My work'], ['visits', 'Visits']];
+  return (MODE === 'full' ? [['home', 'Home'], ['business', 'Business'], ['pipeline', 'Pipeline'], ['visits', 'Visits'], ['team', 'Team']] : [['business', 'Business'], ['pipeline', 'Pipeline'], ['visits', 'Visits'], ['team', 'Team']]).concat(rv);
+};
+try { const t = localStorage.getItem('hubTab'); if (t && (TABS().some(x => x[0] === t) || t === 'health' || t === 'review')) TAB = t; } catch (e) {}
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const plus = n => { const d = new Date(); d.setDate(d.getDate() + n); return ymd(d); };
+const nice = s => { if (!s) return ''; const [y, m, d] = s.slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' }); };
+
+function toast(msg, ms) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', ms || 2500); }
+
+function load() {
+  $('#stamp').textContent = 'Loading…';
+  const slow = setTimeout(() => { $('#stamp').textContent = 'Still loading…'; if (!DATA) $('#main').innerHTML = '<div class="card">Still waiting on Google (first load of the day can take 20–30 seconds). If nothing appears in a minute, press Refresh.</div>'; }, 15000);
+  google.script.run.withSuccessHandler(d => { clearTimeout(slow); DATA = d; render(); $('#stamp').textContent = 'Updated ' + String(d.generated).replace(/^.*, /, ''); $('#stamp').title = d.generated; })
+    .withFailureHandler(e => { clearTimeout(slow); $('#stamp').textContent = 'Could not load'; $('#main').innerHTML = '<div class="card err">Could not load: ' + esc(e.message) + '</div>'; }).getData(KEY);
+}
+
+function call(fn, args, okMsg) {
+  if (busy) return; busy = true;
+  document.body.style.cursor = 'progress';
+  google.script.run.withSuccessHandler(() => { busy = false; document.body.style.cursor = ''; toast(okMsg || 'Saved'); load(); })
+    .withFailureHandler(e => { busy = false; document.body.style.cursor = ''; toast('Not saved: ' + e.message, 6000); load(); })[fn].apply(null, [KEY].concat(args));
+}
+
+function setTab(t) { TAB = t; try { localStorage.setItem('hubTab', t); } catch (e) {} render(); }
+
+function render() {
+  try { draw(); } catch (err) { $('#main').innerHTML = '<div class="card err">Display problem: ' + esc(err.message) + '. Press Refresh; if it repeats, tell Claude.</div>'; }
+}
+
+function draw() {
+  const tabs = TABS();
+  if (!tabs.some(t => t[0] === TAB) && !(TAB === 'health' && MODE === 'full')) TAB = tabs[0][0];
+  const hb = $('#healthBtn'), broken = DATA.health && DATA.health.jobs && DATA.health.jobs.some(j => j.broken);
+  hb.style.display = MODE === 'full' ? '' : 'none'; hb.textContent = broken ? '⚠ Health' : '♥'; hb.className = 'small' + (TAB === 'health' ? ' primary' : '');
+  $('#tabs').innerHTML = tabs.map(([k, n]) => `<button class="tab ${TAB === k ? 'on' : ''}" onclick="setTab('${k}')">${n}</button>`).join('');
+  const r = DATA.reading || {};
+  $('#reading').style.display = DATA.reading && TAB === 'home' ? 'block' : 'none';
+  $('#reading').innerHTML = r.ok
+    ? `Today's reading (${esc(r.date)}): <a href="${esc(r.url)}" target="_blank">${esc(r.passage)}</a>${r.bonus ? ' · Bonus: ' + esc(r.bonus) : ''}`
+    : `Today's reading: <a href="${esc(r.url || 'https:\/\/valleycreek.plus/readingplan')}" target="_blank">open the reading plan</a> <span class="meta">(couldn't read today's entry)</span>`;
+  const m = $('#main');
+  if (TAB === 'home') m.innerHTML = homeHtml(DATA.home);
+  else if (TAB === 'business') m.innerHTML = bizHtml(DATA.business);
+  else if (TAB === 'visits') m.innerHTML = visitsHtml(DATA.business);
+  else if (TAB === 'pipeline') m.innerHTML = pipelineHtml(DATA.business);
+  else if (TAB === 'review') m.innerHTML = reviewHtml(DATA.business);
+  else if (TAB === 'team') m.innerHTML = teamHtml(DATA.business);
+  else m.innerHTML = healthHtml(DATA.health);
+}
+
+/* ---------- building blocks ---------- */
+
+/* ---------- edit helpers ---------- */
+function changed(form) {
+  const f = {};
+  [...form.elements].forEach(el => {
+    if (!el.name) return;
+    if (el.name === 'note') { if (el.value.trim()) f.note = el.value.trim(); return; }
+    if (el.type === 'checkbox') { if (el.checked) f[el.name] = true; return; }
+    const orig = el.tagName === 'SELECT' ? ([...el.options].find(o => o.defaultSelected) || el.options[0]).value : el.defaultValue;
+    if (el.value !== orig) f[el.name] = el.value;
+  });
+  return f;
+}
+function opts(list, cur) { return list.map(o => `<option${String(o) === String(cur) ? ' selected' : ''}>${esc(o)}</option>`).join(''); }
+function saveForm(form, fn, a, b, msg) {
+  const f = changed(form);
+  if (!Object.keys(f).length) { toast('Nothing changed'); return; }
+  call(fn, b === undefined ? [a, f] : [a, b, f], msg || 'Saved');
+}
+const STATUSES = ['Open', 'In progress', 'Waiting', 'Deferred', 'Needs review', 'Done'];
+const STAGES = ['Initial Contact', 'Estimate', 'Estimate Follow-up 1', 'Estimate Follow-up 2', 'Scheduled', '30-60 Day Follow-up', 'Deferred', 'Won', 'Closed / Lost'];
+const OWNERS = { home: ['Justin', 'Amy', 'Anyone'], business: ['Justin', 'Alex', 'Jeremy', 'Micah'] };
+
+
+const FOLD = (() => { try { return JSON.parse(localStorage.getItem('hubFold') || '{}'); } catch (e) { return {}; } })();
+function fold(k) { FOLD[k] = !FOLD[k]; try { localStorage.setItem('hubFold', JSON.stringify(FOLD)); } catch (e) {} render(); }
+function card(title, count, inner, cls, key) {
+  const cnt = count != null ? `<span class="count">${count}</span>` : '';
+  if (!key) return `<section class="card ${cls || ''}"><h2>${title}${cnt}</h2>${inner}</section>`;
+  const shut = !!FOLD[key];
+  return `<section class="card ${cls || ''}"><h2 class="fold" onclick="fold('${key}')"><span><span class="arr">${shut ? '▸' : '▾'}</span>${title}</span>${cnt}</h2>${shut ? '' : inner}</section>`;
+}
+function empty(s) { return `<div class="empty">${s || 'Nothing here.'}</div>`; }
+function errBox(x) { return x && x.error ? `<section class="card"><div class="err">Couldn't load: ${esc(x.error)}</div></section>` : ''; }
+
+function calHtml(items) {
+  if (!items || !items.length) return empty('Nothing on the calendar.');
+  let out = '', last = '';
+  items.forEach(e => {
+    const d = e.start.slice(0, 10);
+    if (d !== last) { out += `<div class="day">${d === DATA.today ? 'Today' : nice(d)}</div>`; last = d; }
+    out += `<div class="ev ${e.social ? 'social' : ''}"><div class="t">${esc(e.time)}</div><div class="body"><div class="title ${e.error ? 'err' : ''}">${esc(e.title)}</div><div class="cal">${e.social ? '<span class="chip">Social</span> ' : ''}${esc(e.cal)}${e.where ? ' · ' + esc(e.where) : ''}</div></div></div>`;
+  });
+  return out;
+}
+
+/* ---------- shared pieces ---------- */
+const SHOW = {};
+function listBlock(key, items, render, none, n) {
+  n = n || 5;
+  if (!items || !items.length) return empty(none);
+  const all = !!SHOW[key], shown = all ? items : items.slice(0, n);
+  return shown.map(render).join('') + (items.length > n ? `<button type="button" class="link" onclick="SHOW['${key}']=${all ? 'false' : 'true'};render()">${all ? 'Show less' : 'Show all (' + items.length + ')'}</button>` : '');
+}
+function tog(ev, elId) {
+  const t = ev.target;
+  if (t.closest('a,button,input,select,textarea,label,form,.actions')) return;
+  const el = document.getElementById(elId); if (el) el.classList.toggle('open');
+}
+function notesHtml(s) {
+  if (!s) return '';
+  const lines = String(s).split(' | ').map(x => x.trim()).filter(Boolean);
+  const recent = lines.slice(-6), older = lines.slice(0, -6);
+  return `<div class="detail"><div class="dlabel">Notes</div>${older.length ? `<details><summary>${older.length} older</summary>${older.map(l => `<div class="nline">${esc(l)}</div>`).join('')}</details>` : ''}${recent.map(l => `<div class="nline">${esc(l)}</div>`).join('')}</div>`;
+}
+let HC = 0;
+function histBtn(id) {
+  const hid = 'h' + (++HC);
+  return `<div class="detail"><button type="button" class="link" onclick="hist('${esc(id)}','${hid}')">Show history</button><div id="${hid}"></div></div>`;
+}
+function hist(id, elId) {
+  const el = document.getElementById(elId); el.textContent = 'Loading…';
+  google.script.run.withSuccessHandler(h => {
+    el.innerHTML = h && h.length ? h.map(x => `<div class="nline"><b>${esc(x.when)}</b> · ${esc(x.who)} ${esc(histVerb(x.action))}${x.undone ? ' <i>(undone)</i>' : ''}${histLines(x.changes, /:add$/.test(x.action)).map(l => `<div class="sub">• ${esc(l)}</div>`).join('')}</div>`).join('') : '<div class="sub">No changes recorded yet (history starts 10/21).</div>';
+  }).withFailureHandler(e => { el.textContent = 'Could not load: ' + e.message; }).getHistory(KEY, id);
+}
+const HIST_VERB = { add: 'created it', edit: 'changed it', done: 'marked it done', snooze: 'snoozed it', waiting: 'marked it waiting', defer: 'parked it', reopen: 'put it back on the list', log: 'logged a contact', handled: 'marked it handled', ignore: 'marked it not needed', assign: 'handed it off', archive: 'archived it', spring: 'set a Feb 1 check-in', now: 'set a check-in now', move: 'moved the date', followup: 'turned it into a follow-up', book: 'booked a visit' };
+function histVerb(a) { const k = String(a).split(':')[1] || a; return HIST_VERB[k] || String(a).replace(':', ' '); }
+const HIST_SKIP = /^(ID|Task ID|Queue Rank|Created|Created By|Calendar event|Source|Completed At|Handled by|Handled at|Decided by|Decided at|Follow-up state|Category|Booked by|Status|Last Updated)$/;
+const HIST_NAME = { 'Next date override': 'Next touch', 'Due Date': 'Deadline', 'Due date': 'Date', 'Snooze Until': 'Hidden until', 'Next Action': 'Next action' };
+function histLines(changes, added) {
+  return String(changes || '').split(/; (?=[A-Z][\w /]*:)/).map(p => {
+    const m = /^([^:]+):\s*(.*)$/.exec(p.trim()); if (!m) return p.trim();
+    const f = HIST_NAME[m[1].trim()] || m[1].trim(), v = m[2].trim();
+    if (/^(Notes|Note|Next step \/ notes)$/.test(f)) return v.replace(/^\+\s*/, 'Note: ');
+    if (added) return HIST_SKIP.test(f) || f === 'Title' || f === 'Client' ? '' : f + ': ' + v;
+    if (/^(Created|Calendar event|Queue Rank|Handled by|Decided by|Decided at|Follow-up state|Completed At|Done date)$/.test(f)) return '';
+    const a = /^(.*?)\s*→\s*(.*)$/.exec(v);
+    return a ? (a[1] ? f + ': ' + a[1] + ' → ' + a[2] : f + ' set to ' + a[2]) : f + ': ' + v;
+  }).filter(Boolean);
+}
+function optsV(pairs, cur) { return pairs.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(l)}</option>`).join(''); }
+const OWNER_PAIRS = () => [['', 'Unassigned']].concat(OWNERS.business.map(o => [o, o]));
+const badge = k => `<span class="badge">${esc(k)}</span>`;
+const ME = () => (DATA.business && DATA.business.me) || 'Justin';
+const isMine = owner => ME() === 'Justin' ? (!owner || owner === 'Justin') : owner === ME();
+const CREW = () => !!(DATA && DATA.crew);
+function photoBar(id, url) {
+  if (!DATA.photos) return url ? `<div class="detail"><a href="${esc(url)}" target="_blank">Photos ↗</a></div>` : '';
+  return `<div class="decide"><button type="button" class="small primary" onclick="CAM.open('${id}')">📷 Camera</button><label style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px;background:var(--card)">Add photos<input type="file" accept="image/*" multiple style="display:none" onchange="CAM.files(this,'${id}')"></label>${url ? `<a href="${esc(url)}" target="_blank">Open photos ↗</a>` : '<span class="sub">no photos yet</span>'}</div>`;
+}
+
+/* ---------- tasks ---------- */
+
+function taskItem(side, t, tag) {
+  const id = esc(t.id), key = side + '-' + id + (tag ? '-' + tag : '');
+  const date = t.due || t.snooze;
+  const btn = (label, js, cls) => `<button type="button" class="small ${cls || ''}" onclick="${js}">${label}</button>`;
+  const dateBox = `<input type="date" id="d-${key}" value="${plus(3)}">`;
+  const dv = `document.getElementById('d-${key}').value`;
+  const sb = `document.getElementById('sb-${key}').value`;
+  const decide = t.reviewOf && !CREW()
+    ? `<div class="decide">${btn('Looks good — close it', `call('taskAction',['${side}','${id}','done'],'Closed ✓')`, 'primary')}<input id="sb-${key}" placeholder="What still needs doing?">${btn('Send back to ' + esc(t.reviewOf), `call('taskAction',['${side}','${id}','sendback',${sb}],'Sent back')`)}</div>`
+    : t.why || t.state === 'review'
+    ? `<div class="decide">${btn('Do it now', `call('taskAction',['${side}','${id}','reopen'],'Back on the list')`, 'primary')}${btn('Still waiting → until', `call('taskAction',['${side}','${id}','waiting',${dv}],'Waiting')`)}${dateBox}${btn('Close it', `call('taskAction',['${side}','${id}','done'],'Closed')`)}</div>` : '';
+  const owners = side === 'home' ? OWNERS.home.map(o => [o, o]) : OWNER_PAIRS();
+  if (t.owner && !owners.some(o => o[0] === t.owner)) owners.push([t.owner, t.owner]);
+  const from = side === 'business' && t.by && t.by !== ME() && t.owner === ME() ? `<span class="chip">from ${esc(t.by)}</span> ` : '';
+  return `<div class="item">
+    <input type="checkbox" title="${CREW() ? 'Done (goes to Justin to check)' : 'Mark done'}" onclick="this.disabled=true;call('taskAction',['${side}','${id}','done'],CREW() ? 'Sent to Justin to check ✓' : 'Done ✓')">
+    <div class="body tap" onclick="tog(event,'a-${key}')">
+      <div class="title ${t.pri === 1 ? 'p1' : ''}">${tag ? badge(tag) + ' ' : ''}${esc(t.title)}</div>
+      <div class="sub">${date ? `<span class="${t.overdue ? 'late' : ''}">${nice(date)}</span> · ` : ''}${from}${esc(t.owner || 'Unassigned')}${t.cat ? ' · ' + esc(t.cat) : ''}${t.instr ? ' · 📋' : ''}${t.photos ? ' · 📷' : ''}</div>
+      ${t.why ? `<span class="why">${esc(t.why)}</span>` : ''}
+      ${t.next ? `<div class="next">→ ${esc(t.next)}</div>` : ''}
+      <div class="actions" id="a-${key}">
+        ${t.instr ? `<div class="detail instr"><div class="dlabel">Instructions</div>${esc(t.instr)}</div>` : ''}
+        ${side === 'business' ? photoBar(id, t.photos) : ''}
+        ${notesHtml(t.notes)}
+        ${side === 'business' ? histBtn(t.id) : ''}
+        ${decide || `<div class="dlabel">Not now? Hide it until a day, then it comes back on the list</div>
+        <div class="decide">${btn('Tomorrow', `call('taskAction',['${side}','${id}','snooze','${plus(1)}'],'Back tomorrow')`)}${btn('Next week', `call('taskAction',['${side}','${id}','snooze','${plus(7)}'],'Back in a week')`)}<span class="sub">or</span>${dateBox}<select id="k-${key}"><option value="snooze">Remind me then</option><option value="waiting">Waiting on someone: check back then</option>${CREW() ? '' : '<option value="defer">Parked: bring it back then</option>'}</select>${btn('Set', `call('taskAction',['${side}','${id}',document.getElementById('k-${key}').value,${dv}],'Set')`)}</div>`}
+        ${CREW() ? `<form class="edit" onsubmit="event.preventDefault();saveForm(this,'taskEdit','${side}','${id}')">
+          <label class="full">Next step<input name="next" value="${esc(t.next)}"></label>
+          <label>Status<select name="status">${opts(['Open', 'In progress', 'Waiting', 'Done'], t.status)}</select></label>
+          <label>Due<input type="date" name="due" value="${esc(t.due)}"></label>
+          <label class="full">Add a note<input name="note" placeholder="What you did / found (tap the mic on your keyboard)"></label>
+          <button class="small primary full">Save</button>
+        </form>` : `<form class="edit" onsubmit="event.preventDefault();saveForm(this,'taskEdit','${side}','${id}')">
+          <label class="full">Title<input name="title" value="${esc(t.title)}"></label>
+          <label class="full">Next action<input name="next" value="${esc(t.next)}"></label>
+          ${side === 'business' ? `<label class="full">Instructions (for whoever does it)<textarea name="instr" rows="3">${esc(t.instr || '')}</textarea></label>` : ''}
+          <label>Status<select name="status">${opts(STATUSES, t.status)}</select></label>
+          <label>Owner<select name="owner">${optsV(owners, t.owner)}</select></label>
+          <label>Priority<select name="pri">${optsV([[1, '1: Urgent'], [2, '2: Normal'], [3, '3: Whenever']], t.pri)}</select></label>
+          <label>Deadline<input type="date" name="due" value="${esc(t.due)}"></label>
+          <label class="full">Add a note<input name="note" placeholder="What happened? (tap the mic on your keyboard)"></label>
+          <button class="small primary full">Save changes</button>
+        </form>`}
+      </div>
+    </div>
+    <button class="more" title="Open" onclick="document.getElementById('a-${key}').classList.toggle('open')">⋯</button>
+  </div>`;
+}
+
+function taskList(side, list, none) { return list && list.length ? list.map(t => taskItem(side, t)).join('') : empty(none); }
+
+function addTaskForm(side) {
+  if (side === 'home') return `<form class="row" onsubmit="event.preventDefault();call('addTask',['home',this.t.value,this.d.value,this.o.value],'Added');this.reset()">
+    <input type="text" name="t" placeholder="Add a task…" required><input type="date" name="d">
+    <select name="o">${OWNERS.home.map(o => `<option>${o}</option>`).join('')}</select><button class="small primary">Add</button></form>`;
+  const me = ME();
+  return `<details class="addbox"><summary>+ Add a task</summary><form class="edit" onsubmit="event.preventDefault();call('addTask',['business',this.t.value,this.d.value,this.o.value,'Clients & Jobs',this.i.value],'Added');this.reset()">
+    <label class="full">Task<input type="text" name="t" required placeholder="What needs doing"></label>
+    <label>Due<input type="date" name="d"></label>
+    <label>Who<select name="o">${CREW() ? optsV([[me, me]], me) : optsV(OWNER_PAIRS(), me === 'Justin' ? 'Justin' : me)}</select></label>
+    <label class="full">Instructions (optional)<textarea name="i" rows="3" placeholder="Details for whoever does it"></textarea></label>
+    <button class="small primary full">Add task</button></form></details>`;
+}
+
+/* ---------- Home ---------- */
+
+function homeHtml(h) {
+  if (!h || h.error) return errBox(h || { error: 'No data' });
+  const t = h.tasks;
+  const items = t.review.concat(t.due, t.upcoming, t.open);
+  const tasks = listBlock('home-tasks', items, x => taskItem('home', x), 'Nothing due.') + addTaskForm('home');
+  const rec = h.recurring;
+  const recEdit = x => `<div class="actions" id="r-${esc(x.id)}"><form class="edit" onsubmit="event.preventDefault();saveForm(this,'recurringEdit','${esc(x.id)}')">
+      <label>Every<input type="number" min="1" name="n" value="${esc(x.n)}"></label>
+      <label>Unit<select name="unit">${opts(['days', 'weeks', 'months', 'years'], x.unit)}</select></label>
+      <label>Who<input name="who" value="${esc(x.who)}"></label>
+      <label>Skip to<input type="date" name="skipTo"></label>
+      <label class="full">Add a note<input name="note" placeholder="e.g. filter size 16x25x1"></label>
+      <button class="small primary full">Save</button></form></div>`;
+  const recItem = x => `<div class="item"><input type="checkbox" title="Done today" onclick="this.disabled=true;call('recurringDone',['${esc(x.id)}'],'Logged')"><div class="body tap" onclick="tog(event,'r-${esc(x.id)}')"><div class="title">${esc(x.title)}</div><div class="sub"><span class="${x.overdue ? 'late' : ''}">${nice(x.next)}</span> · every ${esc(x.every)} · ${esc(x.who)}</div>${recEdit(x)}</div><button class="more" onclick="document.getElementById('r-${esc(x.id)}').classList.toggle('open')">⋯</button></div>`;
+  const recHtml = listBlock('home-rec', rec.items, recItem, 'Nothing coming due.') +
+    (rec.untracked.length ? `<details><summary>${rec.untracked.length} not tracked yet — tick the ones done recently</summary>${rec.untracked.map(x => `<div class="item"><input type="checkbox" title="Done today" onclick="this.disabled=true;call('recurringDone',['${esc(x.id)}'],'Tracking started')"><div class="body"><div class="title">${esc(x.title)}</div><div class="sub">every ${esc(x.every)}</div></div></div>`).join('')}</details>` : '');
+  const shopItem = s => `<div class="item"><input type="checkbox" title="Bought" data-k="${esc(s.key)}" onclick="this.disabled=true;call('shoppingCheck',[this.dataset.k],'Checked off')"><div class="body"><div class="title">${esc(s.item)}</div>${s.store ? `<div class="sub">${esc(s.store)}</div>` : ''}</div><button class="small" title="Remove (not buying)" data-k="${esc(s.key)}" onclick="call('shoppingRemove',[this.dataset.k,''],'Removed')">✕</button></div>`;
+  const shop = listBlock('home-shop', h.shopping, shopItem, 'List is empty.', 8) +
+    `<form class="row" onsubmit="event.preventDefault();call('shoppingAdd',[this.i.value,this.s.value],'Added');this.reset()"><input type="text" name="i" placeholder="Add item…" required><select name="s"><option value="">Store</option><option>Kroger</option><option>Sam's Club</option><option>H Mart</option><option>Walmart</option><option>Costco</option></select><button class="small primary">Add</button></form>`;
+  const meals = h.meals.length ? h.meals.map(x => `<div class="item"><div class="body"><div class="title">${esc(x.dinner)}</div><div class="sub">Day ${esc(x.day)}${x.notes ? ' · ' + esc(x.notes) : ''}</div></div></div>`).join('') : empty('No meal plan.');
+  return card('Tasks', items.length, tasks) +
+    card('Coming up', null, calHtml(h.calendar)) +
+    card('House & recurring', rec.items.length, recHtml) +
+    card('Shopping list', h.shopping.length, shop) +
+    card('Meals', null, meals);
+}
+
+/* ---------- Business: follow-ups, leads, inbox, visits ---------- */
+
+const isWin = f => /win-back|re-engage/i.test(f.type);
+function fuItem(f, tag) {
+  const id = esc(f.id), key = 'f-' + id + (tag ? '-' + tag : '');
+  tag = tag || (isWin(f) ? 'Last try' : '');
+  return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
+    <div class="title">${tag ? badge(tag) + ' ' : ''}${esc(f.client)} <span class="sub">— ${esc(/win-back/i.test(f.type) ? 'lost lead, one spring check-in' : /re-engage/i.test(f.type) ? 'stale client, one check-in' : f.type)}</span></div>
+    <div class="sub">${f.state === 'Last try sent' ? `Waiting for a reply · auto-archives ${nice(f.due)}` : f.state === 'Replied' ? '<span class="late">They answered — next step?</span>' : `<span class="${f.overdue ? 'late' : ''}">${nice(f.due)}</span>`} · ${esc(f.owner || 'Unassigned')}${f.phone ? ` · <a href="tel:${esc(f.phone)}">call</a> · <a href="sms:${esc(f.phone)}">text</a>` : ''}${f.email ? ` · <a href="mailto:${esc(f.email)}">email</a>` : ''}</div>
+    ${f.context ? `<div class="next">${esc(f.context)}</div>` : ''}
+    ${f.recent ? `<div class="notes">Recent: ${esc(f.recent)}</div>` : ''}
+    <div class="actions" id="${key}">
+      ${notesHtml(f.notes)}${histBtn(f.id)}
+      ${isWin(f) ? `<div class="decide"><span class="sub">Done with them?</span><button type="button" class="small primary" onclick="if(this.dataset.ok){call('followupEdit',['${id}',{archive:true}],'Archived — no more follow-ups')}else{this.dataset.ok=1;this.textContent='Sure? Archive'}">Archive</button></div>` : ''}
+      <form class="edit" onsubmit="event.preventDefault();call('logFollowup',['${id}',this.m.value,this.o.value,this.n.value],'Follow-up logged')">
+        <label>How<select name="m"><option>Call</option><option>Text</option><option>Email</option><option>In person</option></select></label>
+        <label>Outcome<select name="o">${isWin(f) ? '<option value="No answer">Reached out, no reply yet (auto-archives in 14 days)</option><option value="New work">Interested</option><option value="Not interested">Not interested (archive)</option>' : '<option>Happy</option><option>Issue to fix</option><option>New work</option><option>No answer</option><option>Not interested</option><option>Won</option><option>Lost</option>'}</select></label>
+        <label class="full">Note<input type="text" name="n" placeholder="What was said (optional)"></label>
+        <button class="small primary full">Log it (done)</button>
+      </form>
+      <form class="edit" onsubmit="event.preventDefault();saveForm(this,'followupEdit','${id}')">
+        <label>Move to<input type="date" name="due" value="${esc(f.due)}"></label>
+        <label>Owner<select name="owner">${optsV(OWNER_PAIRS(), f.owner)}</select></label>
+        <label class="full"><input type="checkbox" name="skip" style="width:auto"> Not needed (close it)</label>
+        <label class="full">Add a note<input name="note" placeholder="Note without closing it"></label>
+        <button class="small full">Save</button>
+      </form>
+    </div></div>
+    <button class="small" onclick="document.getElementById('${key}').classList.toggle('open')">Log</button></div>`;
+}
+
+function leadItem(l, tag) {
+  const id = esc(l.id), key = 'l-' + id + (tag ? '-' + tag : '');
+  const stages = STAGES.indexOf(l.stage) < 0 ? STAGES.concat([l.stage]) : STAGES;
+  return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
+    <div class="title">${tag ? badge(tag) + ' ' : ''}${esc(l.client)} <span class="sub">— ${esc(l.job)}</span></div>
+    <div class="sub">${l.next ? `<span class="${l.overdue ? 'late' : ''}">${nice(l.next)}</span> · ` : 'No date · '}${esc(l.stage)} · ${esc(l.owner || 'Unassigned')}${l.phone ? ` · <a href="tel:${esc(l.phone)}">call</a> · <a href="sms:${esc(l.phone)}">text</a>` : ''}${l.email ? ` · <a href="mailto:${esc(l.email)}">email</a>` : ''}</div>
+    ${l.action ? `<div class="next">→ ${esc(l.action)}</div>` : ''}
+    <div class="actions" id="${key}">
+      ${notesHtml(l.notes)}${histBtn(l.id)}
+      <form class="edit" onsubmit="event.preventDefault();saveForm(this,'leadEdit','${id}',undefined,/lost/i.test(this.stage.value)&&this.stage.value!==this.stage.dataset.was&&!this.archive.checked?'Saved — spring win-back added for Feb 1':'')">
+        <label>Stage<select name="stage" data-was="${esc(l.stage)}">${opts(stages, l.stage)}</select></label>
+        <label>Next touch<input type="date" name="next" value="${esc(l.next)}"></label>
+        <label>Owner<select name="owner">${optsV(OWNER_PAIRS(), l.owner)}</select></label>
+        <label class="full">Next action<input name="action" value="${esc(l.action)}"></label>
+        <label class="full"><input type="checkbox" name="touched" style="width:auto"> Contacted them today</label>
+        <label class="full">Add a note<input name="note" placeholder="What happened / why lost"></label>
+        <label class="full sub"><input type="checkbox" name="archive" style="width:auto"> If Lost: archive (no Feb 1 win-back)</label>
+        <button class="small primary full">Save</button>
+      </form>
+    </div></div>
+    <button class="more" onclick="document.getElementById('${key}').classList.toggle('open')">⋯</button></div>`;
+}
+
+const KIND_ICON = { 'Missed call': '📞', 'Voicemail': '📼', 'Text': '💬', 'Email lead': '✉️', 'Call': '📞', 'Thumbtack lead': '📌', 'Email': '✉️', 'Visit suggestion': '📍' };
+function suggestItem(x) {
+  const id = esc(x.id), m = /^visit:(\d{4}-\d{2}-\d{2})(?:\|(\d{2}:\d{2}))?/.exec(x.link || '') || [];
+  return `<div class="item"><div class="body"><div class="title">📍 Book on-site: ${esc(x.name || x.from)}</div>
+    <div class="sub">${esc(nice(m[1] || ''))}${m[2] ? ' ' + esc(m[2]) : ''} · from your ${esc(x.line)}</div><div class="next">${esc(x.summary)}</div>
+    <form class="edit" onsubmit="event.preventDefault();call('inboxAction',['${id}','book',{client:this.c.value,date:this.d.value,time:this.t.value,purpose:this.p.value}],'On-site booked (and on the calendar)')">
+      <label class="full">Client<input name="c" value="${esc(x.name)}"></label>
+      <label>Date<input type="date" name="d" value="${esc(m[1] || '')}"></label><label>Time<input type="time" name="t" value="${esc(m[2] || '')}"></label>
+      <label class="full">What for<input name="p" placeholder="e.g. fix sprinkler leak"></label>
+      <button class="small primary">Book it</button>
+      <button type="button" class="small" onclick="call('inboxAction',['${id}','ignore',{note:'not a visit'}],'Dismissed')">Dismiss</button>
+    </form></div></div>`;
+}
+function inboxItem(x, tag) {
+  if (x.kind === 'Visit suggestion') return suggestItem(x);
+  const id = esc(x.id), key = 'i-' + id + (tag ? '-' + tag : '');
+  const who = x.name ? `${esc(x.name)} <span class="sub">${esc(x.from)}</span>` : esc(x.from);
+  return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
+    <div class="title">${tag ? badge(tag) + ' ' : ''}${KIND_ICON[x.kind] || '•'} ${who}</div>
+    <div class="sub"><span class="${x.ageH >= 24 ? 'late' : ''}">${esc(x.when)}</span> · ${esc(x.kind)}${x.line ? ' · ' + esc(x.line) : ''} · ${esc(x.owner || 'Unassigned')}${x.match ? ' · ' + esc(x.match) : ''}${x.phone ? ` · <a href="tel:${esc(x.phone)}">call</a> · <a href="sms:${esc(x.phone)}">text</a>` : ''}${x.link ? ` · <a href="${esc(x.link)}" target="_blank">open</a>` : ''}</div>
+    ${x.summary ? `<div class="next">${esc(x.summary)}</div>` : ''}
+    ${x.replied ? `<span class="why">↩ ${esc(x.replyNote || 'Replied')} — pick the next step</span>` : ''}
+    <div class="actions" id="${key}">
+      <form class="edit" onsubmit="event.preventDefault();call('inboxAction',['${id}','handled',{note:this.note.value}],'Marked handled')">
+        <label class="full">Note (optional)<input name="note" placeholder="${x.replied ? 'What was decided' : 'What you did'}"></label>
+        <button class="small primary">${x.replied ? 'Done — nothing more' : 'Handled'}</button>
+        <button class="small" type="button" onclick="call('inboxAction',['${id}','ignore',{note:this.form.note.value}],'Marked not needed')">Not needed</button>
+      </form>
+      <form class="row" onsubmit="event.preventDefault();call('inboxAction',['${id}','assign',{owner:this.o.value}],'Handed over')">
+        <label class="sub">Give to <select name="o">${OWNERS.business.map(o => `<option${o === x.owner ? ' selected' : ''}>${o}</option>`).join('')}</select></label>
+        <button class="small">Give</button>
+      </form>
+      <form class="edit" onsubmit="event.preventDefault();call('inboxAction',['${id}','followup',{name:this.name.value,type:this.type.value,due:this.due.value,owner:this.owner.value,note:this.note.value}],'Follow-up created')">
+        <label class="full">Name<input name="name" value="${esc(x.name)}" placeholder="Who is this?"></label>
+        <label>Type<select name="type">${opts(['New lead', 'Call back', 'Estimate', 'Issue to fix', 'Check-in'], 'New lead')}</select></label>
+        <label>When<input type="date" name="due" value="${esc(DATA.today)}"></label>
+        <label>Owner<select name="owner">${opts(OWNERS.business, x.owner || ME())}</select></label>
+        <label>Note<input name="note"></label>
+        <button class="small full">Make a follow-up</button>
+      </form>
+    </div></div>
+    <button class="small" onclick="document.getElementById('${key}').classList.toggle('open')">Do</button></div>`;
+}
+
+function mapLink(addr) { return addr ? `<a href="${'https:\/\/maps.google.com/?q=' + encodeURIComponent(addr)}" target="_blank">map</a>` : ''; }
+function visitItem(v, tag) {
+  const id = esc(v.id), key = 'v-' + id + (tag ? '-' + tag : '');
+  return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
+    <div class="title">${tag ? badge(tag) + ' ' : ''}📍 ${esc(v.client)}</div>
+    <div class="sub"><span class="${v.today || (v.past && v.status === 'Scheduled') ? 'late' : ''}">${v.today ? 'Today' : nice(v.date)}${v.past && v.status === 'Scheduled' ? ' — tap Done if it happened' : ''}${v.time ? ' ' + esc(v.time) : ''}</span> · ${esc(v.owner)}${v.photos ? ' · 📷' : ''}${v.status !== 'Scheduled' ? ' · ' + esc(v.status) : ''}${v.address ? ' · ' + mapLink(v.address) : ''}${v.phone ? ` · <a href="tel:${esc(v.phone)}">call</a>` : ''}</div>
+    ${v.purpose ? `<div class="next">${esc(v.purpose)}</div>` : ''}
+    <div class="actions" id="${key}">
+      <div class="detail"><div class="dlabel">Where</div>${esc(v.address || '—')} ${mapLink(v.address)}<br><span class="sub">Booked by ${esc(v.by)}</span></div>
+      ${photoBar(id, v.photos)}
+      ${notesHtml(v.notes)}${histBtn(v.id)}
+      <div class="decide"><button type="button" class="small primary" onclick="call('visitEdit',['${id}',{status:'Done'}],'Done — quote step added')">Done</button><button type="button" class="small" onclick="call('visitEdit',['${id}',{status:'Canceled'}],'Canceled')">Cancel visit</button></div>
+      <form class="edit" onsubmit="event.preventDefault();saveForm(this,'visitEdit','${id}')">
+        <label>Date<input type="date" name="date" value="${esc(v.date)}"></label>
+        <label>Time<input type="time" name="time" value="${esc(v.time)}"></label>
+        <label class="full">What it's for<textarea name="purpose" rows="2">${esc(v.purpose)}</textarea></label>
+        <label class="full">Address<input name="address" value="${esc(v.address)}"></label>
+        <label>Phone<input name="phone" value="${esc(v.phone)}"></label>
+        ${CREW() ? '' : `<label>Who's going<select name="owner">${opts(OWNERS.business, v.owner)}</select></label>`}
+        <label class="full">Add a note<input name="note" placeholder="What you found / measurements"></label>
+        <button class="small primary full">Save</button>
+      </form>
+    </div></div>
+    <button class="more" onclick="document.getElementById('${key}').classList.toggle('open')">⋯</button></div>`;
+}
+function addVisitForm() {
+  return `<details class="addbox"><summary>+ Book a site visit</summary><form class="edit" onsubmit="event.preventDefault();call('visitAdd',[{client:this.c.value,date:this.d.value,time:this.t.value,address:this.a.value,phone:this.p.value,purpose:this.w.value,owner:this.o.value}],'Booked (and added to the calendar)');this.reset()">
+    <label class="full">Client<input name="c" required placeholder="Name"></label>
+    <label>Date<input type="date" name="d" required value="${esc(DATA.today)}"></label>
+    <label>Time<input type="time" name="t"></label>
+    <label class="full">Address<input name="a"></label>
+    <label>Phone<input name="p"></label>
+    <label>Who's going<select name="o">${CREW() ? opts([ME()], ME()) : opts(OWNERS.business, 'Justin')}</select></label>
+    <label class="full">What it's for<textarea name="w" rows="2" placeholder="Estimate for… / check on…"></textarea></label>
+    <button class="small primary full">Book it</button></form></details>`;
+}
+
+/* ---------- priority (one list, most urgent first) ---------- */
+/* First contact (missed calls, texts, new leads, call-backs) beats everything except a broken automation.
+ * Then visits today, overdue follow-ups/leads (more days late = higher), decisions, overdue tasks, due today, soon, priority. */
+const DN = { open: '' };
+function dnTog(k) { DN.open = DN.open === k ? '' : k; render(); }
+const daysLate = d => d ? Math.round((new Date(DATA.today + 'T12:00:00') - new Date(String(d).slice(0, 10) + 'T12:00:00')) / 864e5) : 0;
+function whenChip(d, none) {
+  if (!d) return { t: none || 'No date', late: !!none };
+  const n = daysLate(d);
+  if (n > 0) return { t: n + 'd late', late: true };
+  if (n === 0) return { t: 'Today', late: false };
+  if (n === -1) return { t: 'Tomorrow', late: false };
+  return { t: nice(d), late: false };
+}
+const ownerIs = (p, o) => p === 'Justin' ? (!o || o === 'Justin') : o === p;
+const openFirst = h => h.replace('class="actions"', 'class="actions open"');
+
+function priorityList(b, who) {
+  const out = [], mine = o => ownerIs(who, o);
+  const slip = {}; (b.slipping || []).forEach(x => { slip[x.id] = x.why; });
+  const add = (key, s, tag, cls, name, chip, why, full) => out.push({ key: key, s: s, tag: tag, cls: cls, name: name, chip: chip, why: why || slip[key.split(':')[1]] || '', full: full });
+  if (who === ME() && MODE === 'full' && DATA.health && DATA.health.jobs) DATA.health.jobs.filter(j => j.broken).forEach(j =>
+    add('fix:' + j.job, 1200, 'Fix', 'hot', 'Hub: "' + j.job + '" is failing', { t: 'Now', late: true }, j.lastError, () => `<div class="item"><div class="body"><div class="sub">${esc(j.lastError || '')}</div><button class="small primary" onclick="DN.open='';setTab('health')">Open Health</button></div></div>`));
+  ((b.inbox && b.inbox.items) || []).filter(x => mine(x.owner)).forEach(x => x.kind === 'Visit suggestion' ?
+    add('in:' + x.id, 1000, 'Book?', 'dec', x.name || x.from, whenChip(String(x.link || '').slice(6, 16)), 'You said you would come out', () => inboxItem(x)) : x.replied ?
+    add('in:' + x.id, 790 + Math.min(x.ageH || 0, 48), 'Next step?', 'dec', x.name || x.from, { t: 'replied', late: x.ageH >= 48 }, x.replyNote, () => inboxItem(x)) :
+    add('in:' + x.id, 1100 + Math.min(x.ageH || 0, 72), x.kind === 'Email lead' ? 'New lead' : x.kind === 'Thumbtack lead' ? 'Thumbtack' : x.kind, 'hot', x.name || x.from, { t: x.ageH >= 48 ? Math.round(x.ageH / 24) + 'd waiting' : x.ageH >= 1 ? x.ageH + 'h ago' : 'Just now', late: x.ageH >= 24 }, 'First contact', () => inboxItem(x)));
+  (b.visits || []).filter(v => v.today && v.status === 'Scheduled' && mine(v.owner)).forEach(v =>
+    add('v:' + v.id, 1050, 'Visit', '', v.client, { t: v.time || 'Today', late: false }, v.purpose, () => visitItem(v)));
+  b.leads.filter(l => mine(l.owner)).forEach(l => {
+    const first = /initial/i.test(l.stage), n = daysLate(l.next);
+    if (l.next && n < 0 && !(first && n >= -1)) return;
+    const s = first ? 1000 + Math.max(n, 0) * 5 : !l.next ? 700 : n > 0 ? 830 + Math.min(n, 30) * 5 : 760;
+    add('l:' + l.id, s + (/estimate/i.test(l.stage) ? 40 : 0), 'Lead', first ? 'hot' : '', l.client + (l.job ? ' — ' + l.job : ''), whenChip(l.next, 'No date'), first ? 'First contact' : '', () => leadItem(l));
+  });
+  b.followups.filter(f => mine(f.owner) && f.due <= DATA.today).forEach(f => {
+    const n = daysLate(f.due), first = /new lead|call back/i.test(f.type);
+    const s = first ? 1000 + n * 5 : n > 0 ? 830 + Math.min(n, 30) * 5 : 750;
+    add('f:' + f.id, s + (/estimate|quote/i.test(f.type) ? 40 : 0), first ? 'Call back' : isWin(f) ? 'Last try' : /quote/i.test(f.type) ? 'Quote' : 'Follow-up', first ? 'hot' : '', f.client + (f.type ? ' — ' + f.type : ''), whenChip(f.due), first ? 'First contact' : '', () => fuItem(f));
+  });
+  (b.all || []).filter(t => mine(t.owner)).forEach(t => {
+    if (t.state === 'review') return add('t:' + t.id, 800, 'Decide', 'dec', t.title, { t: 'Decide', late: false }, t.why, () => taskItem('business', t));
+    if (t.state !== 'active' && t.state !== 'schedule') return;
+    const n = daysLate(t.due);
+    let s = t.due && n > 0 ? 780 + Math.min(n, 30) * 4 : t.due && n === 0 ? 720 : t.due && n >= -7 ? 600 + n * 20 : t.pri === 1 ? 450 : t.pri === 2 ? 300 : 100;
+    if (t.state === 'schedule') s -= 50;
+    add('t:' + t.id, s, 'Task', '', t.title, whenChip(t.due, ''), '', () => taskItem('business', t));
+  });
+  return out.sort((a, c) => c.s - a.s);
+}
+
+function dnRow(c) {
+  const on = DN.open === c.key, k = esc(c.key).replace(/'/g, '');
+  return `<div class="dn ${on ? 'on' : ''}" onclick="dnTog('${k}')"><span class="badge ${c.cls}">${esc(c.tag)}</span><span class="nm">${esc(c.name)}</span><span class="dd ${c.chip.late ? 'late' : ''}">${esc(c.chip.t)}</span></div>` +
+    (on ? `<div class="dnx"><div class="xbar"><span class="why"${c.why ? '' : ' style="visibility:hidden"'}>${esc(c.why || '-')}</span><button type="button" class="small" onclick="dnTog('')">▲ Hide</button></div>${openFirst(c.full())}</div>` : '');
+}
+function dnBlock(list, key, n) {
+  if (!list.length) return empty('Nothing urgent. Nice.');
+  const all = !!SHOW[key], shown = all ? list : list.slice(0, n || 5);
+  if (DN.open && !shown.some(c => c.key === DN.open)) DN.open = '';
+  return shown.map(dnRow).join('') + (list.length > (n || 5) ? `<button type="button" class="link" onclick="SHOW['${key}']=${all ? 'false' : 'true'};render()">${all ? 'Show top 5' : 'Show ' + (list.length - (n || 5)) + ' more'}</button>` : '');
+}
+
+/* ---------- Business tab ---------- */
+
+function bizHtml(b) {
+  if (!b || b.error) return errBox(b || { error: 'No data' });
+  const myTasks = (b.all || []).filter(t => isMine(t.owner));
+  const myActive = myTasks.filter(t => t.state === 'active' || t.state === 'schedule');
+  const myWaiting = myTasks.filter(t => t.state === 'waiting');
+  const myParked = myTasks.filter(t => t.state === 'snoozed' || t.state === 'deferred');
+  const pl = priorityList(b, ME());
+  return card('Do next', pl.length > 5 ? pl.length : null, dnBlock(pl, 'dn'), 'wide hero') +
+    card('My tasks', myActive.length, listBlock('mytasks', myActive, t => taskItem('business', t), 'Nothing on your list.') +
+      (myWaiting.length ? `<details><summary>Waiting on others (${myWaiting.length})</summary>${myWaiting.map(t => taskItem('business', t)).join('')}</details>` : '') +
+      (myParked.length ? `<details><summary>Snoozed / deferred (${myParked.length})</summary>${myParked.map(t => taskItem('business', t)).join('')}</details>` : '') + addTaskForm('business'), 'wide', 'f-tasks');
+}
+
+/* ---------- Pipeline tab: unanswered calls/texts on top, then leads, then follow-ups (win-backs last) ---------- */
+
+function pipelineHtml(b) {
+  if (!b || b.error) return errBox(b || { error: 'No data' });
+  const inbox = (b.inbox && b.inbox.items) || [];
+  const mineFirst = list => list.filter(x => isMine(x.owner)).concat(list.filter(x => !isMine(x.owner)));
+  const team = (list, label, fn) => list.length ? `<details><summary>${label} (${list.length})</summary>${list.map(fn).join('')}</details>` : '';
+  const myLeads = b.leads.filter(l => isMine(l.owner)), otherLeads = b.leads.filter(l => !isMine(l.owner));
+  const fus = b.followups.filter(f => !isWin(f)), wins = b.followups.filter(isWin);
+  const myFu = fus.filter(f => isMine(f.owner)), otherFu = fus.filter(f => !isMine(f.owner));
+  const myWins = wins.filter(f => isMine(f.owner)), otherWins = wins.filter(f => !isMine(f.owner));
+  return (inbox.length ? card('Unanswered calls &amp; texts', inbox.length, listBlock('inbox', mineFirst(inbox), x => inboxItem(x), ''), 'wide warnc') : '') +
+    card('Leads', myLeads.length, listBlock('myleads', myLeads, l => leadItem(l), 'No leads for you to touch.') + team(otherLeads, "Team's leads", l => leadItem(l)), '', 'f-leads') +
+    card('Follow-ups', myFu.length, listBlock('myfu', myFu, f => fuItem(f), 'No follow-ups due soon.') + team(otherFu, "Team's follow-ups", f => fuItem(f)) +
+      (wins.length ? `<h3>Last tries (one check-in each, then they archive themselves)</h3>${listBlock('wins', myWins, f => fuItem(f), 'None of yours.', 3)}${team(otherWins, "Team's win-backs", f => fuItem(f))}` : ''), '', 'f-fu');
+}
+
+/* ---------- photos: in-hub camera (stays open; every shot uploads to the visit's Drive folder) ---------- */
+
+const CAM = {
+  id: '', stream: null, queue: [], busy: false, sent: 0, failed: 0, err: '',
+  status() {
+    const left = this.queue.length + (this.busy ? 1 : 0);
+    const t = (this.sent ? this.sent + ' saved' : '') + (left ? (this.sent ? ' · ' : '') + left + ' uploading…' : '') + (this.failed ? ' · ' + this.failed + ' failed: ' + this.err : '');
+    $('#camst').textContent = t || 'Tap the circle to take a photo';
+    const bar = $('#upbar'); bar.textContent = '📷 ' + (t || ''); bar.style.display = t && $('#cam').style.display !== 'flex' && (left || this.failed) ? 'block' : 'none';
+  },
+  async open(id) {
+    this.id = id; this.sent = 0; this.failed = 0;
+    $('#cam').style.display = 'flex'; this.status();
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 4032 }, height: { ideal: 3024 } }, audio: false });
+      const v = $('#camv'); v.srcObject = this.stream; await v.play();
+    } catch (e) { $('#camst').textContent = 'Camera not available here (' + (e.message || e.name) + '). Use "Add photos" instead.'; }
+  },
+  async snap() {
+    if (!this.stream) return;
+    let blob = null;
+    try { if (window.ImageCapture) blob = await new ImageCapture(this.stream.getVideoTracks()[0]).takePhoto(); } catch (e) {}
+    if (!blob) {
+      const v = $('#camv'), c = document.createElement('canvas');
+      c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0);
+      blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+    }
+    $('#cam').classList.add('flash'); setTimeout(() => $('#cam').classList.remove('flash'), 120);
+    if (navigator.vibrate) navigator.vibrate(30);
+    this.add(blob);
+  },
+  files(input, id) { this.id = id; [...input.files].forEach(f => this.add(f)); input.value = ''; },
+  add(blob) { this.queue.push({ blob: blob, id: this.id, n: Date.now() }); this.status(); this.pump(); },
+  async shrink(blob) {
+    const img = await createImageBitmap(blob), max = 2400, k = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const out = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+    return await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(',')[1]); fr.readAsDataURL(out); });
+  },
+  async pump() {
+    if (this.busy || !this.queue.length) return;
+    this.busy = true; this.status();
+    const job = this.queue.shift();
+    try {
+      const b64 = await this.shrink(job.blob);
+      await new Promise((ok, no) => google.script.run.withSuccessHandler(ok).withFailureHandler(no).photoUpload(KEY, job.id, b64, 'image/jpeg', job.id + ' ' + new Date(job.n).toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.jpg'));
+      this.sent++;
+    } catch (e) { this.failed++; this.err = String((e && e.message) || e).slice(0, 80); }
+    this.busy = false; this.status();
+    if (this.queue.length) this.pump(); else if ($('#cam').style.display !== 'flex') { toast(this.sent + ' photo' + (this.sent === 1 ? '' : 's') + ' saved'); load(); }
+  },
+  close() {
+    if (this.stream) this.stream.getTracks().forEach(t => t.stop());
+    this.stream = null; $('#cam').style.display = 'none'; this.status();
+    if (!this.queue.length && !this.busy && this.sent) { toast(this.sent + ' photo' + (this.sent === 1 ? '' : 's') + ' saved'); load(); }
+  },
+};
+
+/* ---------- Review tab (temporary): stale clients, one decision each ---------- */
+
+const RV = { open: '', q: '' };
+function reviewHtml(b) {
+  const st = b && b.stale;
+  if (!st || st.error) return errBox(st || { error: 'No review list' });
+  const q = RV.q.toLowerCase();
+  const list = st.items.filter(x => !q || (x.name + ' ' + x.address + ' ' + x.email).toLowerCase().indexOf(q) >= 0);
+  const all = !!SHOW.rv, shown = all ? list : list.slice(0, 15);
+  const row = x => {
+    const on = RV.open === x.id, id = esc(x.id);
+    const btn = (d, label, cls) => `<button type="button" class="small ${cls || ''}" onclick="rvDo('${id}','${d}',this)">${label}</button>`;
+    return `<div class="dn ${on ? 'on' : ''}" onclick="RV.open=RV.open==='${id}'?'':'${id}';render()"><span class="nm">${esc(x.name)}</span><span class="dd">${x.last ? 'last ' + esc(x.last) : 'never booked'} · ${esc(x.paid)}</span></div>` +
+      (on ? `<div class="dnx"><div class="xbar"><span class="sub">${esc(x.visits)} visits · ${esc(x.paid)} paid</span><button type="button" class="small" onclick="RV.open='';render()">▲ Hide</button></div>
+        <div class="detail">${esc(x.address)} ${mapLink(x.address)}<br>${x.phone ? `<a href="tel:${esc(x.phone)}">call</a> · <a href="sms:${esc(x.phone)}">text</a> · ` : ''}${x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : ''}${x.notes ? `<div class="notes">${esc(x.notes)}</div>` : ''}</div>
+        <form class="edit" id="rvf" onsubmit="event.preventDefault()">
+          <label>Who reaches out<select name="o">${optsV(OWNER_PAIRS(), ME())}</select></label>
+          <label>Note (optional)<input name="n" placeholder="Why / what to say"></label>
+        </form>
+        <div class="decide" style="margin-top:6px">${btn('now', 'Reach out now', 'primary')}${btn('spring', 'Feb 1 check-in')}${btn('active', 'Still a client')}${btn('archive', 'Archive')}${btn('dnc', 'Do not contact')}</div></div>` : '');
+  };
+  return card(`Review: stale clients <span class="count">${st.left} of ${st.total} left</span>`, null,
+    `<form class="row" onsubmit="event.preventDefault()"><input type="text" placeholder="Search name or street" value="${esc(RV.q)}" oninput="RV.q=this.value;clearTimeout(RV.t);RV.t=setTimeout(()=>{render();const i=document.querySelector('#main input[type=text]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},300)"></form>
+     <p class="sub">Most recently booked first. Tap a name, pick one choice; it drops off this list. "Reach out now" and "Feb 1 check-in" make a Re-engage follow-up.</p>` +
+    (shown.map(row).join('') || empty(st.left ? 'No matches.' : 'All reviewed. Nice.')) +
+    (list.length > 15 ? `<button type="button" class="link" onclick="SHOW.rv=${all ? 'false' : 'true'};render()">${all ? 'Show first 15' : 'Show all ' + list.length}</button>` : ''), 'wide hero');
+}
+function rvDo(id, d, el) {
+  const f = document.getElementById('rvf'), args = { owner: f ? f.o.value : '', note: f ? f.n.value : '' };
+  if (d === 'dnc' || d === 'archive') { if (!el.dataset.ok) { el.dataset.ok = 1; el.textContent = 'Sure? ' + el.textContent; return; } }
+  RV.open = '';
+  call('staleDecide', [id, d, args], { now: 'Re-engage follow-up added for today', spring: 'Feb 1 check-in added', active: 'Marked still a client', archive: 'Archived', dnc: 'Marked do not contact' }[d]);
+}
+
+/* ---------- Visits tab ---------- */
+
+function visitsHtml(b) {
+  if (!b || b.error) return errBox(b || { error: 'No data' });
+  const vs = b.visits || [];
+  const up = vs.filter(v => v.status === 'Scheduled'), done = vs.filter(v => v.status !== 'Scheduled');
+  let last = '', list = '';
+  up.forEach(v => { const h = v.past ? 'Not marked done yet' : v.today ? 'Today' : nice(v.date); if (h !== last) { list += `<div class="day">${h}</div>`; last = h; } list += visitItem(v); });
+  return card('Site visits', up.length, (list || empty('None booked.')) + addVisitForm(), 'wide hero') +
+    (done.length ? card('Done (last 3 days)', done.length, done.map(v => visitItem(v)).join(''), '', 'f-vdone') : '') +
+    card('Calendar', null, calHtml(b.calendar), '', 'f-cal');
+}
+
+/* ---------- Team tab ---------- */
+
+const TEAM = { who: '' };
+function teamHtml(b) {
+  if (!b || b.error) return errBox(b || { error: 'No data' });
+  const me = b.me, all = b.all || [], people = b.people;
+  if (people.indexOf(TEAM.who) < 0) TEAM.who = people.filter(p => p !== me)[0] || me;
+  const tw = TEAM.who, is = o => ownerIs(tw, o);
+  const cnt = p => priorityList(b, p).length;
+  const pills = `<div class="pills">${people.map(p => `<button type="button" class="pill ${p === tw ? 'on' : ''}" onclick="TEAM.who='${p}';DN.open='';render()">${p}${p === me ? ' (me)' : ''} <span class="count">${cnt(p)}</span></button>`).join('')}</div>`;
+  const pl = priorityList(b, tw);
+  const tasks = all.filter(t => is(t.owner) && t.state !== 'snoozed' && t.state !== 'deferred');
+  const fus = b.followups.filter(f => is(f.owner)), leads = b.leads.filter(l => is(l.owner));
+  const visits = (b.visits || []).filter(v => is(v.owner) && v.status === 'Scheduled');
+  const person = pills + '<h3>Most urgent</h3>' + dnBlock(pl, 'team-dn-' + tw) +
+    `<details><summary>All tasks (${tasks.length})</summary>${tasks.map(t => taskItem('business', t, t.state === 'waiting' ? 'Waiting' : '')).join('') || empty('None.')}</details>` +
+    (fus.length ? `<details><summary>Follow-ups (${fus.length})</summary>${fus.map(f => fuItem(f)).join('')}</details>` : '') +
+    (leads.length ? `<details><summary>Leads (${leads.length})</summary>${leads.map(l => leadItem(l)).join('')}</details>` : '') +
+    (visits.length ? `<details><summary>Site visits (${visits.length})</summary>${visits.map(v => visitItem(v)).join('')}</details>` : '');
+
+  let seen = ''; try { seen = localStorage.getItem('feedSeen') || ''; } catch (e) {}
+  const feed = (b.feed || []).filter(a => SHOW.feedMine || a.who !== me);
+  const fresh = feed.filter(a => a.time > seen).length;
+  const feedItem = a => `<div class="item"><div class="body"><div class="title">${a.time > seen ? '<span class="badge new">new</span> ' : ''}${esc(a.who)} · ${esc(a.action.replace(':', ' '))}: ${esc(a.title || a.id)}</div><div class="sub">${esc(a.when)} · ${esc(a.changes)}${a.undone ? ' · <i>undone ' + esc(a.undone) + '</i>' : ''}</div></div>${a.canUndo ? `<button class="small" onclick="if(this.dataset.ok){call('activityUndo',[${a.row}],'Undone')}else{this.dataset.ok=1;this.textContent='Sure? Undo'}">Undo</button>` : ''}</div>`;
+  const feedHtml = listBlock('feed', feed, feedItem, 'Nothing yet.', 8) + `<button type="button" class="link" onclick="SHOW.feedMine=${SHOW.feedMine ? 'false' : 'true'};render()">${SHOW.feedMine ? 'Hide my own changes' : 'Show my changes too (to undo them)'}</button> ` + (fresh ? `<button type="button" class="link" onclick="try{localStorage.setItem('feedSeen','${esc(feed[0].time)}')}catch(e){};render()">Mark all seen</button>` : '');
+  return card('Team', null, person, 'wide hero') +
+    card(`Activity${fresh ? ` <span class="badge new">${fresh} new</span>` : ''}`, null, feedHtml, 'wide', 'f-feed');
+}
+
+/* ---------- Health ---------- */
+
+function healthHtml(h) {
+  if (!h || h.error) return errBox(h || { error: 'No data' });
+  const jobs = h.jobs.length ? `<table><tr><th>Job</th><th>Last OK</th><th>Last error</th></tr>${h.jobs.map(j => `<tr><td>${esc(j.job)}</td><td>${esc(j.lastOk || '—')}</td><td class="${j.lastError ? 'err' : ''}">${esc(j.lastError || '—')}</td></tr>`).join('')}</table>` : empty('No runs logged yet.');
+  const recent = h.recent.map(r => `<div class="item"><div class="body"><div class="sub">${esc(r.time)} · ${esc(r.src)} · ${esc(r.action)} · <span class="${r.result === 'ERROR' ? 'err' : ''}">${esc(r.result)}</span></div><div class="next">${esc(r.item)}${r.detail ? ' — ' + esc(r.detail) : ''}</div></div></div>`).join('') || empty('Nothing logged.');
+  const loadErrs = ['home', 'business', 'reading'].filter(k => DATA[k] && DATA[k].error).map(k => `<div class="err">${k}: ${esc(DATA[k].error)}</div>`).join('');
+  return card('Automation health', null, jobs + (loadErrs ? '<h3>Load problems now</h3>' + loadErrs : '') +
+      `<form class="row" onsubmit="event.preventDefault()"><button class="small" onclick="call('retry',['reading'],'Reading refetched')">Retry reading</button><button class="small" onclick="call('retry',['email'],'Test email sent')">Send test email now</button></form>`) +
+    card('Recent activity', null, recent, 'wide');
+}
+
+
+/* ---------- assistant: hold to talk ---------- */
+const ASST = {
+  hist: [], rec: null, text: '', holding: false, downAt: 0, busy: false,
+  speak: (() => { try { return localStorage.getItem('hubSpeak') === '1'; } catch (e) { return false; } })(),
+  open() { $('#asst').classList.add('open'); },
+  close() { $('#asst').classList.remove('open'); },
+  add(cls, t) { const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = t; $('#asstLog').appendChild(d); while ($('#asstLog').children.length > 8) $('#asstLog').firstChild.remove(); $('#asst').scrollTop = 1e6; },
+  toggleSpeak() { this.speak = !this.speak; try { localStorage.setItem('hubSpeak', this.speak ? '1' : '0'); } catch (e) {} $('#spk').textContent = this.speak ? '🔊 on' : '🔈 off'; },
+  keyForm() { this.open(); const f = $('#asstKey'); f.style.display = f.style.display === 'none' ? 'flex' : 'none'; },
+  saveKey(k) {
+    google.script.run.withSuccessHandler(r => { $('#asstKey').style.display = 'none'; this.add('', r.ready ? 'Key saved. The assistant is on.' : 'Key removed. The assistant is off.'); })
+      .withFailureHandler(e => this.add('err', e.message)).setClaudeKey(KEY, k);
+  },
+  say(t) { if (!this.speak || !window.speechSynthesis) return; try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(t)); } catch (e) {} },
+  send(q) {
+    q = String(q || '').trim(); if (!q || this.busy) return;
+    this.open(); this.add('you', '🗣 ' + q); $('#asstLive').textContent = 'Thinking…'; this.busy = true;
+    const hist = this.hist.slice(-6);
+    const openEl = document.querySelector('.actions.open'), m = /(SV|OPP|FU|TASK|HOME|IN)-\d+/.exec((DN.open || '') + ' ' + (openEl ? openEl.id : ''));
+    const ctx = { open: m ? m[0] : '' };
+    google.script.run.withSuccessHandler(r => {
+      this.busy = false; $('#asstLive').textContent = '';
+      this.add('', r.reply); this.say(r.reply);
+      this.hist.push({ role: 'user', text: q }, { role: 'assistant', text: r.reply });
+      if (r.changed) load();
+    }).withFailureHandler(e => {
+      this.busy = false; $('#asstLive').textContent = '';
+      const m = String(e.message || e);
+      if (/NO_KEY/.test(m)) { this.add('err', 'The assistant is off until a Claude API key is added. Paste it below.'); $('#asstKey').style.display = 'flex'; }
+      else this.add('err', m);
+    }).assist(KEY, q, hist, ctx);
+  },
+  start() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { this.open(); this.add('err', 'This browser can\'t listen. Type instead (Chrome works best).'); return; }
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    this.SR = SR; this.done = ''; this.part = ''; this.text = ''; this.holding = true;
+    $('#mic').classList.add('rec'); this.open(); $('#asstLive').textContent = 'Listening…';
+    this.listen();
+  },
+  /* one phrase per session (Android repeats itself in continuous mode); restart while the button is held */
+  listen() {
+    const r = new this.SR(); this.rec = r;
+    r.lang = 'en-US'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+    r.onresult = ev => {
+      let fin = '', tmp = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) { const t = ev.results[i][0].transcript.trim(); if (ev.results[i].isFinal) fin = t; else tmp = t; }
+      if (fin) { this.done = (this.done + ' ' + fin).trim(); this.part = ''; } else this.part = tmp;
+      this.text = (this.done + ' ' + this.part).trim();
+      $('#asstLive').textContent = this.text || 'Listening…';
+    };
+    r.onerror = ev => { if (ev.error === 'not-allowed') { this.holding = false; this.add('err', 'Microphone is blocked. Allow the mic for this site in Chrome settings.'); } };
+    r.onend = () => {
+      this.rec = null;
+      if (this.part) { this.done = (this.done + ' ' + this.part).trim(); this.part = ''; }
+      if (this.holding) { try { this.listen(); } catch (e) {} return; }
+      $('#mic').classList.remove('rec');
+      const t = this.done.trim();
+      if (t) this.send(t); else $('#asstLive').textContent = '';
+    };
+    try { r.start(); } catch (e) { this.add('err', 'Could not start the mic: ' + e.message); }
+  },
+  stop() { this.holding = false; if (this.rec) { try { this.rec.stop(); } catch (e) {} } else $('#mic').classList.remove('rec'); },
+};
+(() => {
+  const m = $('#mic');
+  $('#spk').textContent = ASST.speak ? '🔊 on' : '🔈 off';
+  m.addEventListener('pointerdown', e => { e.preventDefault(); ASST.downAt = Date.now(); ASST.start(); });
+  const up = e => { if (!ASST.holding) return; e.preventDefault(); const quick = Date.now() - ASST.downAt < 350; ASST.stop(); if (quick && !ASST.text) { $('#asstLive').textContent = 'Hold the button while you talk, or type below.'; } };
+  m.addEventListener('pointerup', up); m.addEventListener('pointercancel', up); m.addEventListener('pointerleave', up);
+})();
+
+HUB.boot();
+timer = setInterval(() => { if (!busy && !DN.open && !document.querySelector('.actions.open') && document.activeElement.tagName !== 'INPUT') load(); }, 5 * 60 * 1000);
+</script>
+</body>
+</html>

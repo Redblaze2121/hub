@@ -242,6 +242,7 @@ window.google = { script: { get run() { return HUB.run(null, null); } } };
 let DATA = null, TAB = MODE === 'full' ? 'home' : 'business', busy = false, timer = null;
 const TABS = () => {
   const st = DATA && DATA.business && DATA.business.stale, rv = MODE === 'full' && st && st.left ? [['review', 'Review ' + st.left]] : [];   /* stale-client review is Justin's only */
+  if (DATA && DATA.crew) return [['business', 'My work'], ['visits', 'Visits']];
   return (MODE === 'full' ? [['home', 'Home'], ['business', 'Business'], ['pipeline', 'Pipeline'], ['visits', 'Visits'], ['team', 'Team']] : [['business', 'Business'], ['pipeline', 'Pipeline'], ['visits', 'Visits'], ['team', 'Team']]).concat(rv);
 };
 try { const t = localStorage.getItem('hubTab'); if (t && (TABS().some(x => x[0] === t) || t === 'health' || t === 'review')) TAB = t; } catch (e) {}
@@ -392,6 +393,11 @@ const OWNER_PAIRS = () => [['', 'Unassigned']].concat(OWNERS.business.map(o => [
 const badge = k => `<span class="badge">${esc(k)}</span>`;
 const ME = () => (DATA.business && DATA.business.me) || 'Justin';
 const isMine = owner => ME() === 'Justin' ? (!owner || owner === 'Justin') : owner === ME();
+const CREW = () => !!(DATA && DATA.crew);
+function photoBar(id, url) {
+  if (!DATA.photos) return url ? `<div class="detail"><a href="${esc(url)}" target="_blank">Photos ↗</a></div>` : '';
+  return `<div class="decide"><button type="button" class="small primary" onclick="CAM.open('${id}')">📷 Camera</button><label style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px;background:var(--card)">Add photos<input type="file" accept="image/*" multiple style="display:none" onchange="CAM.files(this,'${id}')"></label>${url ? `<a href="${esc(url)}" target="_blank">Open photos ↗</a>` : '<span class="sub">no photos yet</span>'}</div>`;
+}
 
 /* ---------- tasks ---------- */
 
@@ -401,25 +407,35 @@ function taskItem(side, t, tag) {
   const btn = (label, js, cls) => `<button type="button" class="small ${cls || ''}" onclick="${js}">${label}</button>`;
   const dateBox = `<input type="date" id="d-${key}" value="${plus(3)}">`;
   const dv = `document.getElementById('d-${key}').value`;
-  const decide = t.why || t.state === 'review'
+  const sb = `document.getElementById('sb-${key}').value`;
+  const decide = t.reviewOf && !CREW()
+    ? `<div class="decide">${btn('Looks good — close it', `call('taskAction',['${side}','${id}','done'],'Closed ✓')`, 'primary')}<input id="sb-${key}" placeholder="What still needs doing?">${btn('Send back to ' + esc(t.reviewOf), `call('taskAction',['${side}','${id}','sendback',${sb}],'Sent back')`)}</div>`
+    : t.why || t.state === 'review'
     ? `<div class="decide">${btn('Do it now', `call('taskAction',['${side}','${id}','reopen'],'Back on the list')`, 'primary')}${btn('Still waiting → until', `call('taskAction',['${side}','${id}','waiting',${dv}],'Waiting')`)}${dateBox}${btn('Close it', `call('taskAction',['${side}','${id}','done'],'Closed')`)}</div>` : '';
   const owners = side === 'home' ? OWNERS.home.map(o => [o, o]) : OWNER_PAIRS();
   if (t.owner && !owners.some(o => o[0] === t.owner)) owners.push([t.owner, t.owner]);
   const from = side === 'business' && t.by && t.by !== ME() && t.owner === ME() ? `<span class="chip">from ${esc(t.by)}</span> ` : '';
   return `<div class="item">
-    <input type="checkbox" title="Mark done" onclick="this.disabled=true;call('taskAction',['${side}','${id}','done'],'Done ✓')">
+    <input type="checkbox" title="${CREW() ? 'Done (goes to Justin to check)' : 'Mark done'}" onclick="this.disabled=true;call('taskAction',['${side}','${id}','done'],CREW() ? 'Sent to Justin to check ✓' : 'Done ✓')">
     <div class="body tap" onclick="tog(event,'a-${key}')">
       <div class="title ${t.pri === 1 ? 'p1' : ''}">${tag ? badge(tag) + ' ' : ''}${esc(t.title)}</div>
-      <div class="sub">${date ? `<span class="${t.overdue ? 'late' : ''}">${nice(date)}</span> · ` : ''}${from}${esc(t.owner || 'Unassigned')}${t.cat ? ' · ' + esc(t.cat) : ''}${t.instr ? ' · 📋' : ''}</div>
+      <div class="sub">${date ? `<span class="${t.overdue ? 'late' : ''}">${nice(date)}</span> · ` : ''}${from}${esc(t.owner || 'Unassigned')}${t.cat ? ' · ' + esc(t.cat) : ''}${t.instr ? ' · 📋' : ''}${t.photos ? ' · 📷' : ''}</div>
       ${t.why ? `<span class="why">${esc(t.why)}</span>` : ''}
       ${t.next ? `<div class="next">→ ${esc(t.next)}</div>` : ''}
       <div class="actions" id="a-${key}">
         ${t.instr ? `<div class="detail instr"><div class="dlabel">Instructions</div>${esc(t.instr)}</div>` : ''}
+        ${side === 'business' ? photoBar(id, t.photos) : ''}
         ${notesHtml(t.notes)}
         ${side === 'business' ? histBtn(t.id) : ''}
         ${decide || `<div class="dlabel">Not now? Hide it until a day, then it comes back on the list</div>
-        <div class="decide">${btn('Tomorrow', `call('taskAction',['${side}','${id}','snooze','${plus(1)}'],'Back tomorrow')`)}${btn('Next week', `call('taskAction',['${side}','${id}','snooze','${plus(7)}'],'Back in a week')`)}<span class="sub">or</span>${dateBox}<select id="k-${key}"><option value="snooze">Remind me then</option><option value="waiting">Waiting on someone: check back then</option><option value="defer">Parked: bring it back then</option></select>${btn('Set', `call('taskAction',['${side}','${id}',document.getElementById('k-${key}').value,${dv}],'Set')`)}</div>`}
-        <form class="edit" onsubmit="event.preventDefault();saveForm(this,'taskEdit','${side}','${id}')">
+        <div class="decide">${btn('Tomorrow', `call('taskAction',['${side}','${id}','snooze','${plus(1)}'],'Back tomorrow')`)}${btn('Next week', `call('taskAction',['${side}','${id}','snooze','${plus(7)}'],'Back in a week')`)}<span class="sub">or</span>${dateBox}<select id="k-${key}"><option value="snooze">Remind me then</option><option value="waiting">Waiting on someone: check back then</option>${CREW() ? '' : '<option value="defer">Parked: bring it back then</option>'}</select>${btn('Set', `call('taskAction',['${side}','${id}',document.getElementById('k-${key}').value,${dv}],'Set')`)}</div>`}
+        ${CREW() ? `<form class="edit" onsubmit="event.preventDefault();saveForm(this,'taskEdit','${side}','${id}')">
+          <label class="full">Next step<input name="next" value="${esc(t.next)}"></label>
+          <label>Status<select name="status">${opts(['Open', 'In progress', 'Waiting', 'Done'], t.status)}</select></label>
+          <label>Due<input type="date" name="due" value="${esc(t.due)}"></label>
+          <label class="full">Add a note<input name="note" placeholder="What you did / found (tap the mic on your keyboard)"></label>
+          <button class="small primary full">Save</button>
+        </form>` : `<form class="edit" onsubmit="event.preventDefault();saveForm(this,'taskEdit','${side}','${id}')">
           <label class="full">Title<input name="title" value="${esc(t.title)}"></label>
           <label class="full">Next action<input name="next" value="${esc(t.next)}"></label>
           ${side === 'business' ? `<label class="full">Instructions (for whoever does it)<textarea name="instr" rows="3">${esc(t.instr || '')}</textarea></label>` : ''}
@@ -429,7 +445,7 @@ function taskItem(side, t, tag) {
           <label>Deadline<input type="date" name="due" value="${esc(t.due)}"></label>
           <label class="full">Add a note<input name="note" placeholder="What happened? (tap the mic on your keyboard)"></label>
           <button class="small primary full">Save changes</button>
-        </form>
+        </form>`}
       </div>
     </div>
     <button class="more" title="Open" onclick="document.getElementById('a-${key}').classList.toggle('open')">⋯</button>
@@ -446,7 +462,7 @@ function addTaskForm(side) {
   return `<details class="addbox"><summary>+ Add a task</summary><form class="edit" onsubmit="event.preventDefault();call('addTask',['business',this.t.value,this.d.value,this.o.value,'Clients & Jobs',this.i.value],'Added');this.reset()">
     <label class="full">Task<input type="text" name="t" required placeholder="What needs doing"></label>
     <label>Due<input type="date" name="d"></label>
-    <label>Who<select name="o">${optsV(OWNER_PAIRS(), me === 'Justin' ? 'Justin' : me)}</select></label>
+    <label>Who<select name="o">${CREW() ? optsV([[me, me]], me) : optsV(OWNER_PAIRS(), me === 'Justin' ? 'Justin' : me)}</select></label>
     <label class="full">Instructions (optional)<textarea name="i" rows="3" placeholder="Details for whoever does it"></textarea></label>
     <button class="small primary full">Add task</button></form></details>`;
 }
@@ -587,7 +603,7 @@ function visitItem(v, tag) {
     ${v.purpose ? `<div class="next">${esc(v.purpose)}</div>` : ''}
     <div class="actions" id="${key}">
       <div class="detail"><div class="dlabel">Where</div>${esc(v.address || '—')} ${mapLink(v.address)}<br><span class="sub">Booked by ${esc(v.by)}</span></div>
-      ${MODE === 'full' ? `<div class="decide"><button type="button" class="small primary" onclick="CAM.open('${id}')">📷 Camera</button><label style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px;background:var(--card)">Add photos<input type="file" accept="image/*" multiple style="display:none" onchange="CAM.files(this,'${id}')"></label>${v.photos ? `<a href="${esc(v.photos)}" target="_blank">Open photos ↗</a>` : '<span class="sub">no photos yet</span>'}</div>` : (v.photos ? `<a href="${esc(v.photos)}" target="_blank">Photos ↗</a>` : '')}
+      ${photoBar(id, v.photos)}
       ${notesHtml(v.notes)}${histBtn(v.id)}
       <div class="decide"><button type="button" class="small primary" onclick="call('visitEdit',['${id}',{status:'Done'}],'Done — quote step added')">Done</button><button type="button" class="small" onclick="call('visitEdit',['${id}',{status:'Canceled'}],'Canceled')">Cancel visit</button></div>
       <form class="edit" onsubmit="event.preventDefault();saveForm(this,'visitEdit','${id}')">
@@ -596,7 +612,7 @@ function visitItem(v, tag) {
         <label class="full">What it's for<textarea name="purpose" rows="2">${esc(v.purpose)}</textarea></label>
         <label class="full">Address<input name="address" value="${esc(v.address)}"></label>
         <label>Phone<input name="phone" value="${esc(v.phone)}"></label>
-        <label>Who's going<select name="owner">${opts(OWNERS.business, v.owner)}</select></label>
+        ${CREW() ? '' : `<label>Who's going<select name="owner">${opts(OWNERS.business, v.owner)}</select></label>`}
         <label class="full">Add a note<input name="note" placeholder="What you found / measurements"></label>
         <button class="small primary full">Save</button>
       </form>
@@ -610,7 +626,7 @@ function addVisitForm() {
     <label>Time<input type="time" name="t"></label>
     <label class="full">Address<input name="a"></label>
     <label>Phone<input name="p"></label>
-    <label>Who's going<select name="o">${opts(OWNERS.business, 'Justin')}</select></label>
+    <label>Who's going<select name="o">${CREW() ? opts([ME()], ME()) : opts(OWNERS.business, 'Justin')}</select></label>
     <label class="full">What it's for<textarea name="w" rows="2" placeholder="Estimate for… / check on…"></textarea></label>
     <button class="small primary full">Book it</button></form></details>`;
 }
