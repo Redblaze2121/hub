@@ -687,10 +687,11 @@ function pipelineHtml(b) {
   const myLeads = b.leads.filter(l => isMine(l.owner)), otherLeads = b.leads.filter(l => !isMine(l.owner));
   const fus = b.followups.filter(f => !isWin(f)), wins = b.followups.filter(isWin);
   const myFu = fus.filter(f => isMine(f.owner)), otherFu = fus.filter(f => !isMine(f.owner));
+  const myWins = wins.filter(f => isMine(f.owner)), otherWins = wins.filter(f => !isMine(f.owner));
   return (inbox.length ? card('Unanswered calls &amp; texts', inbox.length, listBlock('inbox', mineFirst(inbox), x => inboxItem(x), ''), 'wide warnc') : '') +
     card('Leads', myLeads.length, listBlock('myleads', myLeads, l => leadItem(l), 'No leads for you to touch.') + team(otherLeads, "Team's leads", l => leadItem(l)), '', 'f-leads') +
     card('Follow-ups', myFu.length, listBlock('myfu', myFu, f => fuItem(f), 'No follow-ups due soon.') + team(otherFu, "Team's follow-ups", f => fuItem(f)) +
-      (wins.length ? `<h3>Win-backs &amp; re-engage (one check-in each)</h3>${listBlock('wins', wins, f => fuItem(f), '', 3)}` : ''), '', 'f-fu');
+      (wins.length ? `<h3>Win-backs &amp; re-engage (one check-in each)</h3>${listBlock('wins', myWins, f => fuItem(f), 'None of yours.', 3)}${team(otherWins, "Team's win-backs", f => fuItem(f))}` : ''), '', 'f-fu');
 }
 
 /* ---------- photos: in-hub camera (stays open; every shot uploads to the visit's Drive folder) ---------- */
