@@ -241,7 +241,7 @@ window.google = { script: { get run() { return HUB.run(null, null); } } };
 
 let DATA = null, TAB = MODE === 'full' ? 'home' : 'business', busy = false, timer = null;
 const TABS = () => {
-  const st = DATA && DATA.business && DATA.business.stale, rv = st && st.left ? [['review', 'Review ' + st.left]] : [];
+  const st = DATA && DATA.business && DATA.business.stale, rv = MODE === 'full' && st && st.left ? [['review', 'Review ' + st.left]] : [];   /* stale-client review is Justin's only */
   return (MODE === 'full' ? [['home', 'Home'], ['business', 'Business'], ['pipeline', 'Pipeline'], ['visits', 'Visits'], ['team', 'Team']] : [['business', 'Business'], ['pipeline', 'Pipeline'], ['visits', 'Visits'], ['team', 'Team']]).concat(rv);
 };
 try { const t = localStorage.getItem('hubTab'); if (t && (TABS().some(x => x[0] === t) || t === 'health' || t === 'review')) TAB = t; } catch (e) {}
