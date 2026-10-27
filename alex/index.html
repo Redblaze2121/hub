@@ -146,7 +146,7 @@
   <div class="spacer"></div>
   <a class="voice" id="voicebtn" style="display:none" target="_blank" title="Talk to Claude about the hub (opens the Claude app)">Claude app ↗</a>
   <span class="meta" id="stamp">Loading…</span>
-  <button class="small" onclick="load()" title="Refresh">↻</button>
+  <button class="small" onclick="load(true)" title="Refresh">↻</button>
   <button class="small" id="healthBtn" onclick="setTab('health')" title="Automation health" style="display:none">♥</button>
 </header>
 <div class="reading" id="reading" style="display:none"></div>
@@ -213,7 +213,8 @@ const HUB = {
     });
   },
   change() { if (!KEY) return; this.show('change', 'Pick a new passcode (6+ characters). Other devices will need the new one.'); },
-  lock() { this.pass = ''; KEY = ''; DATA = null; $('#main').innerHTML = ''; this.show('enter', 'Locked. Enter your passcode to open.'); },
+  forget() { try { localStorage.removeItem('hubData:' + this.who); } catch (e) {} },
+  lock() { this.forget(); this.pass = ''; KEY = ''; DATA = null; $('#main').innerHTML = ''; this.show('enter', 'Locked. Enter your passcode to open.'); },
   boot() {
     const m = /^#setup=([A-Za-z0-9]{32,})$/.exec(location.hash || '');
     if (m) { this.setupKey = m[1]; this.show('setup'); return; }
@@ -233,7 +234,7 @@ const HUB = {
           }
           if (ok) ok(r.result);
         } else {
-          if (/Not authorized/.test(r.error)) { self.pass = ''; KEY = ''; self.show('enter', '', 'That passcode didn\'t work (or it was changed).'); }
+          if (/Not authorized/.test(r.error)) { self.forget(); DATA = null; $('#main').innerHTML = ''; self.pass = ''; KEY = ''; self.show('enter', '', 'That passcode didn\'t work (or it was changed).'); }
           if (fail) fail({ message: r.error });
         }
       });
@@ -260,11 +261,13 @@ const nice = s => { if (!s) return ''; const [y, m, d] = s.slice(0, 10).split('-
 
 function toast(msg, ms) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', ms || 2500); }
 
-function load() {
-  $('#stamp').textContent = 'Loading…';
+const SAVED = () => 'hubData:' + (typeof HUB === 'object' ? HUB.who : MODE);
+function load(fresh) {
+  if (!DATA) { try { const s = localStorage.getItem(SAVED()); if (s) { DATA = JSON.parse(s); render(); } } catch (e) {} }
+  $('#stamp').textContent = DATA ? 'Refreshing…' : 'Loading…';
   const slow = setTimeout(() => { $('#stamp').textContent = 'Still loading…'; if (!DATA) $('#main').innerHTML = '<div class="card">Still waiting on Google (first load of the day can take 20–30 seconds). If nothing appears in a minute, press Refresh.</div>'; }, 15000);
-  google.script.run.withSuccessHandler(d => { clearTimeout(slow); DATA = d; if (CLIENT.name) clientFetch(); render(); $('#stamp').textContent = 'Updated ' + String(d.generated).replace(/^.*, /, ''); $('#stamp').title = d.generated; })
-    .withFailureHandler(e => { clearTimeout(slow); $('#stamp').textContent = 'Could not load'; $('#main').innerHTML = '<div class="card err">Could not load: ' + esc(e.message) + '</div>'; }).getData(KEY);
+  google.script.run.withSuccessHandler(d => { clearTimeout(slow); DATA = d; try { localStorage.setItem(SAVED(), JSON.stringify(d)); } catch (e) {} if (CLIENT.name) clientFetch(); render(); $('#stamp').textContent = 'Updated ' + String(d.generated).replace(/^.*, /, ''); $('#stamp').title = d.generated; })
+    .withFailureHandler(e => { clearTimeout(slow); $('#stamp').textContent = 'Could not load'; if (DATA && !/authoriz/i.test(e.message)) { toast('Could not refresh: ' + e.message + ' (showing the last copy)', 6000); return; } $('#main').innerHTML = '<div class="card err">Could not load: ' + esc(e.message) + '</div>'; }).getData(KEY, !!fresh);
 }
 
 function call(fn, args, okMsg) {
@@ -745,12 +748,14 @@ function bizHtml(b) {
   const myWaiting = myTasks.filter(t => t.state === 'waiting');
   const myParked = myTasks.filter(t => t.state === 'snoozed' || t.state === 'deferred');
   const pl = priorityList(b, ME());
-  const inbox = (b.inbox && b.inbox.items) || [], others = inbox.filter(x => !isMine(x.owner));
+  const inbox = (b.inbox && b.inbox.items) || [], others = inbox.filter(x => !isMine(x.owner)).sort((a, c) => ownerIs('Justin', a.owner) - ownerIs('Justin', c.owner));   /* Justin's own calls/texts last */
+  const jt = ME() === 'Justin' || CREW() ? [] : (b.all || []).filter(t => ownerIs('Justin', t.owner) && (t.state === 'active' || t.state === 'schedule' || t.state === 'review'));   /* Alex: Justin's business tasks, flagged and kept below his own */
   return card('Do next', pl.length > 5 ? pl.length : null, dnBlock(pl, 'dn'), 'wide hero') +
     (others.length ? card("Team's unanswered calls &amp; texts", others.length, others.map(x => inboxItem(x)).join(''), 'wide') : '') +
     card('My tasks', myActive.length, listBlock('mytasks', myActive, t => taskItem('business', t), 'Nothing on your list.') +
       (myWaiting.length ? `<details><summary>Waiting on others (${myWaiting.length})</summary>${myWaiting.map(t => taskItem('business', t)).join('')}</details>` : '') +
-      (myParked.length ? `<details><summary>Snoozed / deferred (${myParked.length})</summary>${myParked.map(t => taskItem('business', t)).join('')}</details>` : '') + addTaskForm('business'), 'wide', 'f-tasks');
+      (myParked.length ? `<details><summary>Snoozed / deferred (${myParked.length})</summary>${myParked.map(t => taskItem('business', t)).join('')}</details>` : '') + addTaskForm('business'), 'wide', 'f-tasks') +
+    (jt.length ? card("Justin's tasks", jt.length, `<div class="sub" style="margin-bottom:6px">Justin's own list, for reference. Not yours unless he hands one over.</div><details><summary>Show (${jt.length})</summary>${jt.map(t => taskItem('business', t, "Justin's")).join('')}</details>`, 'wide') : '');
 }
 
 /* ---------- Pipeline tab: unanswered calls/texts on top, then leads, then follow-ups (win-backs last) ---------- */
