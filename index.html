@@ -244,7 +244,8 @@ window.google = { script: { get run() { return HUB.run(null, null); } } };
 
 let DATA = null, TAB = MODE === 'full' ? 'home' : 'business', busy = false, timer = null;
 const TABS = () => {
-  const st = DATA && DATA.business && DATA.business.stale, rv = MODE === 'full' && st && st.left ? [['review', 'Review ' + st.left]] : [];   /* stale-client review is Justin's only */
+  const b = DATA && DATA.business, st = b && b.stale, nl = b && !b.error ? laterCount(b) + (MODE === 'full' && st && st.left ? st.left : 0) : 0;
+  const rv = [['later', 'Later' + (nl ? ' ' + nl : '')]];   /* deferred leads + follow-ups not due this week; stale-client review (Justin only) */
   if (DATA && DATA.crew) return [['business', 'My work'], ['visits', 'Visits']];
   return (MODE === 'full' ? [['home', 'Home'], ['business', 'Business'], ['pipeline', 'Pipeline'], ['visits', 'Visits'], ['team', 'Team']] : [['business', 'Business'], ['pipeline', 'Pipeline'], ['visits', 'Visits'], ['team', 'Team']]).concat(rv);
 };
@@ -295,7 +296,7 @@ function draw() {
   else if (TAB === 'business') m.innerHTML = bizHtml(DATA.business);
   else if (TAB === 'visits') m.innerHTML = visitsHtml(DATA.business);
   else if (TAB === 'pipeline') m.innerHTML = pipelineHtml(DATA.business);
-  else if (TAB === 'review') m.innerHTML = reviewHtml(DATA.business);
+  else if (TAB === 'later' || TAB === 'review') m.innerHTML = laterHtml(DATA.business);
   else if (TAB === 'team') m.innerHTML = teamHtml(DATA.business);
   else m.innerHTML = healthHtml(DATA.health);
 }
@@ -699,13 +700,13 @@ function priorityList(b, who) {
     add('in:' + x.id, 1100 + Math.min(x.ageH || 0, 72), x.kind === 'Email lead' ? 'New lead' : x.kind === 'Thumbtack lead' ? 'Thumbtack' : x.kind, 'hot', x.name || x.from, { t: x.ageH >= 48 ? Math.round(x.ageH / 24) + 'd waiting' : x.ageH >= 1 ? x.ageH + 'h ago' : 'Just now', late: x.ageH >= 24 }, 'First contact', () => inboxItem(x)));
   (b.visits || []).filter(v => v.today && v.status === 'Scheduled' && mine(v.owner)).forEach(v =>
     add('v:' + v.id, 1050, 'Visit', '', v.client, { t: v.time || 'Today', late: false }, v.purpose, () => visitItem(v)));
-  b.leads.filter(l => mine(l.owner)).forEach(l => {
+  b.leads.filter(l => mine(l.owner) && !l.later).forEach(l => {
     const first = /initial/i.test(l.stage), n = daysLate(l.next);
     if (l.next && n < 0 && !(first && n >= -1)) return;
     const s = first ? 1000 + Math.max(n, 0) * 5 : !l.next ? 700 : n > 0 ? 830 + Math.min(n, 30) * 5 : 760;
     add('l:' + l.id, s + (/estimate/i.test(l.stage) ? 40 : 0), 'Lead', first ? 'hot' : '', l.client + (l.job ? ' — ' + l.job : ''), whenChip(l.next, 'No date'), first ? 'First contact' : '', () => leadItem(l));
   });
-  b.followups.filter(f => mine(f.owner) && f.due <= DATA.today).forEach(f => {
+  b.followups.filter(f => mine(f.owner) && !f.later && f.due <= DATA.today).forEach(f => {
     const n = daysLate(f.due), first = /new lead|call back/i.test(f.type);
     const s = first ? 1000 + n * 5 : n > 0 ? 830 + Math.min(n, 30) * 5 : 750;
     add('f:' + f.id, s + (/estimate|quote/i.test(f.type) ? 40 : 0), first ? 'Call back' : isWin(f) ? 'Last try' : /quote/i.test(f.type) ? 'Quote' : 'Follow-up', first ? 'hot' : '', f.client + (f.type ? ' — ' + f.type : ''), whenChip(f.due), first ? 'First contact' : '', () => fuItem(f));
@@ -742,7 +743,9 @@ function bizHtml(b) {
   const myWaiting = myTasks.filter(t => t.state === 'waiting');
   const myParked = myTasks.filter(t => t.state === 'snoozed' || t.state === 'deferred');
   const pl = priorityList(b, ME());
+  const inbox = (b.inbox && b.inbox.items) || [], others = inbox.filter(x => !isMine(x.owner));
   return card('Do next', pl.length > 5 ? pl.length : null, dnBlock(pl, 'dn'), 'wide hero') +
+    (others.length ? card("Team's unanswered calls &amp; texts", others.length, others.map(x => inboxItem(x)).join(''), 'wide') : '') +
     card('My tasks', myActive.length, listBlock('mytasks', myActive, t => taskItem('business', t), 'Nothing on your list.') +
       (myWaiting.length ? `<details><summary>Waiting on others (${myWaiting.length})</summary>${myWaiting.map(t => taskItem('business', t)).join('')}</details>` : '') +
       (myParked.length ? `<details><summary>Snoozed / deferred (${myParked.length})</summary>${myParked.map(t => taskItem('business', t)).join('')}</details>` : '') + addTaskForm('business'), 'wide', 'f-tasks');
@@ -755,14 +758,41 @@ function pipelineHtml(b) {
   const inbox = (b.inbox && b.inbox.items) || [];
   const mineFirst = list => list.filter(x => isMine(x.owner)).concat(list.filter(x => !isMine(x.owner)));
   const team = (list, label, fn) => list.length ? `<details><summary>${label} (${list.length})</summary>${list.map(fn).join('')}</details>` : '';
-  const myLeads = b.leads.filter(l => isMine(l.owner)), otherLeads = b.leads.filter(l => !isMine(l.owner));
-  const fus = b.followups.filter(f => !isWin(f)), wins = b.followups.filter(isWin);
+  const leads = b.leads.filter(l => !l.later), myLeads = leads.filter(l => isMine(l.owner)), otherLeads = leads.filter(l => !isMine(l.owner));
+  const soon = b.followups.filter(f => !f.later), fus = soon.filter(f => !isWin(f)), wins = soon.filter(isWin);
+  const nLater = laterCount(b);
   const myFu = fus.filter(f => isMine(f.owner)), otherFu = fus.filter(f => !isMine(f.owner));
   const myWins = wins.filter(f => isMine(f.owner)), otherWins = wins.filter(f => !isMine(f.owner));
-  return (inbox.length ? card('Unanswered calls &amp; texts', inbox.length, listBlock('inbox', mineFirst(inbox), x => inboxItem(x), ''), 'wide warnc') : '') +
-    card('Leads', myLeads.length, listBlock('myleads', myLeads, l => leadItem(l), 'No leads for you to touch.') + team(otherLeads, "Team's leads", l => leadItem(l)), '', 'f-leads') +
+  return card('Leads', myLeads.length, listBlock('myleads', myLeads, l => leadItem(l), 'No leads for you to touch.') + team(otherLeads, "Team's leads", l => leadItem(l)), '', 'f-leads') +
     card('Follow-ups', myFu.length, listBlock('myfu', myFu, f => fuItem(f), 'No follow-ups due soon.') + team(otherFu, "Team's follow-ups", f => fuItem(f)) +
-      (wins.length ? `<h3>Last tries (one check-in each, then they archive themselves)</h3>${listBlock('wins', myWins, f => fuItem(f), 'None of yours.', 3)}${team(otherWins, "Team's win-backs", f => fuItem(f))}` : ''), '', 'f-fu');
+      (wins.length ? `<h3>Last tries (one check-in each, then they archive themselves)</h3>${listBlock('wins', myWins, f => fuItem(f), 'None of yours.', 3)}${team(otherWins, "Team's win-backs", f => fuItem(f))}` : ''), '', 'f-fu') +
+    (nLater ? `<div class="sub" style="margin:4px 4px 12px">Only what's due in the next 7 days is here. ${nLater} more are waiting in <a href="#" onclick="setTab('later');return false">Later</a> and come back here a week before they're due.</div>` : '');
+}
+
+/* ---------- Later: deferred leads, seasonal and future follow-ups, last tries, stale-client review ---------- */
+
+const laterCount = b => (b.leads || []).filter(l => l.later).length + (b.followups || []).filter(f => f.later).length;
+function laterHtml(b) {
+  if (!b || b.error) return errBox(b || { error: 'No data' });
+  const team = (list, label, fn) => list.length ? `<details><summary>${label} (${list.length})</summary>${list.map(fn).join('')}</details>` : '';
+  const leads = b.leads.filter(l => l.later), fus = b.followups.filter(f => f.later && !isWin(f)), wins = b.followups.filter(f => f.later && isWin(f));
+  const sect = (title, list, fn, none, cls) => { const mine = list.filter(x => isMine(x.owner)), other = list.filter(x => !isMine(x.owner));
+    return card(title, mine.length, (mine.length ? byMonth(mine, fn) : empty(none)) + team(other, "Team's", fn), cls || 'wide'); };
+  const st = b.stale;
+  return `<div class="sub" style="margin:4px 4px 12px">Not due this week. Each one moves back to Pipeline 7 days before its date.</div>` +
+    sect('Follow-ups (seasonal / later)', fus, f => fuItem(f), 'Nothing scheduled later.') +
+    sect('Leads on hold', leads, l => leadItem(l), 'No leads on hold.') +
+    sect('Last tries (Feb 1 check-ins)', wins, f => fuItem(f), 'None of yours.') +
+    (MODE === 'full' && st && st.left ? '<h2 style="margin:18px 4px 6px">Stale clients to review (' + st.left + ')</h2>' + reviewHtml(b) : '');
+}
+function byMonth(list, fn) {
+  let last = '', h = '';
+  list.slice().sort((a, c) => String(a.due || a.next || '9').localeCompare(String(c.due || c.next || '9'))).forEach(x => {
+    const d = x.due || x.next, m = d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'No date';
+    if (m !== last) { h += `<div class="day">${m}</div>`; last = m; }
+    h += fn(x);
+  });
+  return h;
 }
 
 /* ---------- photos: in-hub camera (stays open; every shot uploads to the visit's Drive folder) ---------- */
@@ -883,7 +913,7 @@ function teamHtml(b) {
   const pills = `<div class="pills">${people.map(p => `<button type="button" class="pill ${p === tw ? 'on' : ''}" onclick="TEAM.who='${p}';DN.open='';render()">${p}${p === me ? ' (me)' : ''} <span class="count">${cnt(p)}</span></button>`).join('')}</div>`;
   const pl = priorityList(b, tw);
   const tasks = all.filter(t => is(t.owner) && t.state !== 'snoozed' && t.state !== 'deferred');
-  const fus = b.followups.filter(f => is(f.owner)), leads = b.leads.filter(l => is(l.owner));
+  const fus = b.followups.filter(f => is(f.owner) && !f.later), leads = b.leads.filter(l => is(l.owner) && !l.later);
   const visits = (b.visits || []).filter(v => is(v.owner) && v.status === 'Scheduled');
   const person = pills + '<h3>Most urgent</h3>' + dnBlock(pl, 'team-dn-' + tw) +
     `<details><summary>All tasks (${tasks.length})</summary>${tasks.map(t => taskItem('business', t, t.state === 'waiting' ? 'Waiting' : '')).join('') || empty('None.')}</details>` +
