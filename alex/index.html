@@ -902,9 +902,10 @@ function reviewHtml(b) {
   const row = x => {
     const on = RV.open === x.id, id = esc(x.id);
     const btn = (d, label, cls) => `<button type="button" class="small ${cls || ''}" onclick="rvDo('${id}','${d}',this)">${label}</button>`;
-    return `<div class="dn ${on ? 'on' : ''}" onclick="RV.open=RV.open==='${id}'?'':'${id}';render()"><span class="nm">${esc(x.name)}</span><span class="dd">${x.last ? 'last ' + esc(x.last) : 'never booked'} · ${esc(x.paid)}</span></div>` +
+    const sug = (/Suggest:\s*([^|]+)/.exec(x.notes || '') || [])[1] || '';
+    return `<div class="dn ${on ? 'on' : ''}" onclick="RV.open=RV.open==='${id}'?'':'${id}';render()"><span class="nm">${esc(x.name)}${sug ? `<span class="sub" style="display:block;font-weight:400">${esc(sug.trim())}</span>` : ''}</span><span class="dd">${x.last ? 'last ' + esc(x.last) : 'never booked'} · ${esc(x.paid)}</span></div>` +
       (on ? `<div class="dnx"><div class="xbar"><span class="sub">${esc(x.visits)} visits · ${esc(x.paid)} paid</span><button type="button" class="small" onclick="RV.open='';render()">▲ Hide</button></div>
-        <div class="detail">${esc(x.address)} ${mapLink(x.address)}<br>${x.phone ? `<a href="tel:${esc(x.phone)}">call</a> · <a href="sms:${esc(x.phone)}">text</a> · ` : ''}${x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : ''}${x.notes ? `<div class="notes">${esc(x.notes)}</div>` : ''}</div>
+        <div class="detail">${esc(x.address)} ${mapLink(x.address)}<br>${x.phone ? `<a href="tel:${esc(x.phone)}">call</a> · <a href="sms:${esc(x.phone)}">text</a> · ` : ''}${x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : ''}${x.notes ? x.notes.split(' | ').map(n => `<div class="notes">${esc(n)}</div>`).join('') : ''}</div>
         <form class="edit" id="rvf" onsubmit="event.preventDefault()">
           <label>Who reaches out<select name="o">${optsV(OWNER_PAIRS(), ME())}</select></label>
           <label>Note (optional)<input name="n" placeholder="Why / what to say"></label>
