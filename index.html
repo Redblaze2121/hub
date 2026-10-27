@@ -369,8 +369,23 @@ function histBtn(id) {
 function hist(id, elId) {
   const el = document.getElementById(elId); el.textContent = 'Loading…';
   google.script.run.withSuccessHandler(h => {
-    el.innerHTML = h && h.length ? h.map(x => `<div class="nline"><b>${esc(x.when)}</b> ${esc(x.who)} · ${esc(x.action)}${x.undone ? ' (undone)' : ''}<br><span class="sub">${esc(x.changes)}</span></div>`).join('') : '<div class="sub">No changes recorded yet (history starts 10/21).</div>';
+    el.innerHTML = h && h.length ? h.map(x => `<div class="nline"><b>${esc(x.when)}</b> · ${esc(x.who)} ${esc(histVerb(x.action))}${x.undone ? ' <i>(undone)</i>' : ''}${histLines(x.changes, /:add$/.test(x.action)).map(l => `<div class="sub">• ${esc(l)}</div>`).join('')}</div>`).join('') : '<div class="sub">No changes recorded yet (history starts 10/21).</div>';
   }).withFailureHandler(e => { el.textContent = 'Could not load: ' + e.message; }).getHistory(KEY, id);
+}
+const HIST_VERB = { add: 'created it', edit: 'changed it', done: 'marked it done', snooze: 'snoozed it', waiting: 'marked it waiting', defer: 'parked it', reopen: 'put it back on the list', log: 'logged a contact', handled: 'marked it handled', ignore: 'marked it not needed', assign: 'handed it off', archive: 'archived it', spring: 'set a Feb 1 check-in', now: 'set a check-in now', move: 'moved the date', followup: 'turned it into a follow-up', book: 'booked a visit' };
+function histVerb(a) { const k = String(a).split(':')[1] || a; return HIST_VERB[k] || String(a).replace(':', ' '); }
+const HIST_SKIP = /^(ID|Task ID|Queue Rank|Created|Created By|Calendar event|Source|Completed At|Handled by|Handled at|Decided by|Decided at|Follow-up state|Category|Booked by|Status|Last Updated)$/;
+const HIST_NAME = { 'Next date override': 'Next touch', 'Due Date': 'Deadline', 'Due date': 'Date', 'Snooze Until': 'Hidden until', 'Next Action': 'Next action' };
+function histLines(changes, added) {
+  return String(changes || '').split(/; (?=[A-Z][\w /]*:)/).map(p => {
+    const m = /^([^:]+):\s*(.*)$/.exec(p.trim()); if (!m) return p.trim();
+    const f = HIST_NAME[m[1].trim()] || m[1].trim(), v = m[2].trim();
+    if (/^(Notes|Note|Next step \/ notes)$/.test(f)) return v.replace(/^\+\s*/, 'Note: ');
+    if (added) return HIST_SKIP.test(f) || f === 'Title' || f === 'Client' ? '' : f + ': ' + v;
+    if (/^(Created|Calendar event|Queue Rank|Handled by|Decided by|Decided at|Follow-up state|Completed At|Done date)$/.test(f)) return '';
+    const a = /^(.*?)\s*→\s*(.*)$/.exec(v);
+    return a ? (a[1] ? f + ': ' + a[1] + ' → ' + a[2] : f + ' set to ' + a[2]) : f + ': ' + v;
+  }).filter(Boolean);
 }
 function optsV(pairs, cur) { return pairs.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(l)}</option>`).join(''); }
 const OWNER_PAIRS = () => [['', 'Unassigned']].concat(OWNERS.business.map(o => [o, o]));
@@ -402,15 +417,16 @@ function taskItem(side, t, tag) {
         ${t.instr ? `<div class="detail instr"><div class="dlabel">Instructions</div>${esc(t.instr)}</div>` : ''}
         ${notesHtml(t.notes)}
         ${side === 'business' ? histBtn(t.id) : ''}
-        ${decide || `<div class="decide">${btn('Tomorrow', `call('taskAction',['${side}','${id}','snooze','${plus(1)}'],'Snoozed')`)}${btn('+1 week', `call('taskAction',['${side}','${id}','snooze','${plus(7)}'],'Snoozed')`)}${dateBox}${btn('Snooze to', `call('taskAction',['${side}','${id}','snooze',${dv}],'Snoozed')`)}${btn('Waiting until', `call('taskAction',['${side}','${id}','waiting',${dv}],'Marked waiting')`)}${btn('Defer to', `call('taskAction',['${side}','${id}','defer',${dv}],'Deferred')`)}</div>`}
+        ${decide || `<div class="dlabel">Not now? Hide it until a day, then it comes back on the list</div>
+        <div class="decide">${btn('Tomorrow', `call('taskAction',['${side}','${id}','snooze','${plus(1)}'],'Back tomorrow')`)}${btn('Next week', `call('taskAction',['${side}','${id}','snooze','${plus(7)}'],'Back in a week')`)}<span class="sub">or</span>${dateBox}<select id="k-${key}"><option value="snooze">Remind me then</option><option value="waiting">Waiting on someone: check back then</option><option value="defer">Parked: bring it back then</option></select>${btn('Set', `call('taskAction',['${side}','${id}',document.getElementById('k-${key}').value,${dv}],'Set')`)}</div>`}
         <form class="edit" onsubmit="event.preventDefault();saveForm(this,'taskEdit','${side}','${id}')">
           <label class="full">Title<input name="title" value="${esc(t.title)}"></label>
           <label class="full">Next action<input name="next" value="${esc(t.next)}"></label>
           ${side === 'business' ? `<label class="full">Instructions (for whoever does it)<textarea name="instr" rows="3">${esc(t.instr || '')}</textarea></label>` : ''}
           <label>Status<select name="status">${opts(STATUSES, t.status)}</select></label>
           <label>Owner<select name="owner">${optsV(owners, t.owner)}</select></label>
-          <label>Priority<select name="pri">${opts([1, 2, 3], t.pri)}</select></label>
-          <label>Due<input type="date" name="due" value="${esc(t.due)}"></label>
+          <label>Priority<select name="pri">${optsV([[1, '1: Urgent'], [2, '2: Normal'], [3, '3: Whenever']], t.pri)}</select></label>
+          <label>Deadline<input type="date" name="due" value="${esc(t.due)}"></label>
           <label class="full">Add a note<input name="note" placeholder="What happened? (tap the mic on your keyboard)"></label>
           <button class="small primary full">Save changes</button>
         </form>
