@@ -245,7 +245,8 @@ window.google = { script: { get run() { return HUB.run(null, null); } } };
 let DATA = null, TAB = MODE === 'full' ? 'home' : 'business', busy = false, timer = null;
 const TABS = () => {
   const b = DATA && DATA.business, st = b && b.stale, nl = b && !b.error ? laterCount(b) + (MODE === 'full' && st && st.left ? st.left : 0) : 0;
-  const rv = [['later', 'Later' + (nl ? ' ' + nl : '')]];   /* deferred leads + follow-ups not due this week; stale-client review (Justin only) */
+  const mo = b && b.money && b.money.items && b.money.items.length ? ' $' + Math.round(b.money.total).toLocaleString() : '';
+  const rv = [['money', 'Money' + mo], ['later', 'Later' + (nl ? ' ' + nl : '')]];   /* deferred leads + follow-ups not due this week; stale-client review (Justin only) */
   if (DATA && DATA.crew) return [['business', 'My work'], ['visits', 'Visits']];
   return (MODE === 'full' ? [['home', 'Home'], ['business', 'Business'], ['pipeline', 'Pipeline'], ['visits', 'Visits'], ['team', 'Team']] : [['business', 'Business'], ['pipeline', 'Pipeline'], ['visits', 'Visits'], ['team', 'Team']]).concat(rv);
 };
@@ -296,6 +297,7 @@ function draw() {
   else if (TAB === 'business') m.innerHTML = bizHtml(DATA.business);
   else if (TAB === 'visits') m.innerHTML = visitsHtml(DATA.business);
   else if (TAB === 'pipeline') m.innerHTML = pipelineHtml(DATA.business);
+  else if (TAB === 'money') m.innerHTML = moneyHtml(DATA.business);
   else if (TAB === 'later' || TAB === 'review') m.innerHTML = laterHtml(DATA.business);
   else if (TAB === 'team') m.innerHTML = teamHtml(DATA.business);
   else m.innerHTML = healthHtml(DATA.health);
@@ -753,20 +755,49 @@ function bizHtml(b) {
 
 /* ---------- Pipeline tab: unanswered calls/texts on top, then leads, then follow-ups (win-backs last) ---------- */
 
+const LEAD_KIND = l => /estimate|quote/i.test(l.stage) ? 'est' : (/scheduled|won/i.test(l.stage) || /client/i.test(l.rel || '')) ? 'client' : 'new';
+const FU_KIND = f => /new lead|call back|lead/i.test(f.type) ? 'new' : /estimate|quote/i.test(f.type) ? 'est' : 'client';
 function pipelineHtml(b) {
   if (!b || b.error) return errBox(b || { error: 'No data' });
-  const inbox = (b.inbox && b.inbox.items) || [];
-  const mineFirst = list => list.filter(x => isMine(x.owner)).concat(list.filter(x => !isMine(x.owner)));
   const team = (list, label, fn) => list.length ? `<details><summary>${label} (${list.length})</summary>${list.map(fn).join('')}</details>` : '';
-  const leads = b.leads.filter(l => !l.later), myLeads = leads.filter(l => isMine(l.owner)), otherLeads = leads.filter(l => !isMine(l.owner));
-  const soon = b.followups.filter(f => !f.later), fus = soon.filter(f => !isWin(f)), wins = soon.filter(isWin);
+  const leads = b.leads.filter(l => !l.later), soon = b.followups.filter(f => !f.later), fus = soon.filter(f => !isWin(f)), wins = soon.filter(isWin);
   const nLater = laterCount(b);
-  const myFu = fus.filter(f => isMine(f.owner)), otherFu = fus.filter(f => !isMine(f.owner));
+  const sect = (title, kind, none, sub) => {
+    const L = leads.filter(l => LEAD_KIND(l) === kind), F = fus.filter(f => FU_KIND(f) === kind);
+    const all = L.map(l => ({ d: l.next || '0', h: () => leadItem(l), o: l.owner })).concat(F.map(f => ({ d: f.due, h: () => fuItem(f), o: f.owner }))).sort((a, c) => a.d.localeCompare(c.d));
+    const mine = all.filter(x => isMine(x.o)), other = all.filter(x => !isMine(x.o));
+    return card(title, mine.length, `<div class="sub" style="margin-bottom:6px">${sub}</div>` + (mine.length ? mine.map(x => x.h()).join('') : empty(none)) + team(other.map(x => x.h), "Team's", h => h()), 'wide', 'f-' + kind);
+  };
   const myWins = wins.filter(f => isMine(f.owner)), otherWins = wins.filter(f => !isMine(f.owner));
-  return card('Leads', myLeads.length, listBlock('myleads', myLeads, l => leadItem(l), 'No leads for you to touch.') + team(otherLeads, "Team's leads", l => leadItem(l)), '', 'f-leads') +
-    card('Follow-ups', myFu.length, listBlock('myfu', myFu, f => fuItem(f), 'No follow-ups due soon.') + team(otherFu, "Team's follow-ups", f => fuItem(f)) +
-      (wins.length ? `<h3>Last tries (one check-in each, then they archive themselves)</h3>${listBlock('wins', myWins, f => fuItem(f), 'None of yours.', 3)}${team(otherWins, "Team's win-backs", f => fuItem(f))}` : ''), '', 'f-fu') +
+  return sect('New leads', 'new', 'No new leads for you.', "Haven't booked with us yet and haven't been quoted.") +
+    sect('Estimates out', 'est', 'No estimates waiting on you.', 'Quoted, waiting on a yes.') +
+    sect('Client follow-ups', 'client', 'No client follow-ups due.', 'Customers who have booked with us.') +
+    (wins.length ? card('Last tries', myWins.length, listBlock('wins', myWins, f => fuItem(f), 'None of yours.', 3) + team(otherWins, "Team's", f => fuItem(f)), 'wide') : '') +
     (nLater ? `<div class="sub" style="margin:4px 4px 12px">Only what's due in the next 7 days is here. ${nLater} more are waiting in <a href="#" onclick="setTab('later');return false">Later</a> and come back here a week before they're due.</div>` : '');
+}
+
+/* ---------- Money: unpaid invoices (from Yardbook's Invoice report) ---------- */
+
+function moneyHtml(b) {
+  if (!b || b.error) return errBox(b || { error: 'No data' });
+  const m = b.money || {};
+  const how = `<div class="sub" style="margin-top:8px">From Yardbook's Invoice report${m.source ? ': ' + esc(m.source) : ''}. To refresh it, run the Invoice report in Yardbook (Reports → Invoice, Jan 1 to today) and have it emailed. The hub picks up the newest one within the hour.</div>`;
+  if (m.error) return errBox(m);
+  if (m.none) return card('Chasing money', null, empty('No invoice report yet.') + how, 'wide hero');
+  const money = n => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const late = m.items.filter(x => x.age > 0), notYet = m.items.filter(x => x.age <= 0);
+  const byClient = list => { const g = {}; list.forEach(x => { (g[x.client] = g[x.client] || []).push(x); }); return Object.keys(g).map(k => ({ client: k, inv: g[k], bal: g[k].reduce((s, x) => s + x.bal, 0), age: Math.max.apply(null, g[k].map(x => x.age)) })).sort((a, c) => c.age - a.age || c.bal - a.bal); };
+  const row = c => { const x = c.inv[0], ph = c.inv.map(i => i.phone).find(Boolean), em = c.inv.map(i => i.email).find(Boolean);
+    const what = c.inv.map(i => (i.num ? '#' + i.num + ' ' : '') + money(i.bal) + (i.age > 0 ? ' · ' + i.age + 'd late' : i.due ? ' · due ' + nice(i.due) : '')).join('; ');
+    const t = 'Chase payment: ' + c.client + ' ' + money(c.bal) + ' (' + c.inv.map(i => i.num ? '#' + i.num : '').filter(String).join(', ') + ')';
+    return `<div class="item"><div class="body"><div class="title">${clientLink(c.client)} <span class="${c.age > 30 ? 'late' : ''}">${money(c.bal)}</span></div>
+      <div class="sub">${esc(what)}${ph ? ` · <a href="tel:${esc(ph)}">call</a> · <a href="sms:${esc(ph)}">text</a>` : ''}${em ? ` · <a href="mailto:${esc(em)}">email</a>` : ''}</div></div>
+      <button type="button" class="small" data-t="${esc(t)}" onclick="call('addTask',['business',this.dataset.t,'${DATA.today}','Alex','Clients & Jobs','Payment reminder — check Yardbook, then text or call.'],'Chase task added for Alex')">Chase</button></div>`; };
+  const lc = byClient(late), nc = byClient(notYet);
+  return card('Chasing money', null, `<div style="font-size:22px;font-weight:600">${money(m.total)} unpaid</div><div class="sub">${money(late.reduce((s, x) => s + x.bal, 0))} past due across ${lc.length} client${lc.length === 1 ? '' : 's'}</div>` +
+      (m.missing && m.missing.length ? `<div class="why">Couldn't find these columns in the report: ${esc(m.missing.join(', '))}. Tell Claude.</div>` : '') + how, 'wide hero') +
+    card('Past due', lc.length, lc.map(row).join('') || empty('Nothing past due.'), 'wide') +
+    (nc.length ? card('Not due yet', nc.length, `<details><summary>Show ${nc.length}</summary>${nc.map(row).join('')}</details>`, 'wide') : '');
 }
 
 /* ---------- Later: deferred leads, seasonal and future follow-ups, last tries, stale-client review ---------- */
