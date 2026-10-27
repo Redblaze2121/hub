@@ -54,6 +54,9 @@
   .ev .t { width: 70px; flex: none; color: var(--quiet); font-size: 13px; padding-top: 1px; }
   .ev.social .title { color: var(--soc); }
   .ev .cal { color: var(--quiet); font-size: 12px; }
+  .clink { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+  .tl { border-left: 2px solid var(--line); margin-left: 6px; padding-left: 12px; }
+  .tl .nline { margin-bottom: 8px; }
   .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--soc-soft); color: var(--soc); font-size: 12px; }
   form.row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   form.row input[type=text] { flex: 1; min-width: 140px; }
@@ -258,18 +261,18 @@ function toast(msg, ms) { const t = $('#toast'); t.textContent = msg; t.style.di
 function load() {
   $('#stamp').textContent = 'Loading…';
   const slow = setTimeout(() => { $('#stamp').textContent = 'Still loading…'; if (!DATA) $('#main').innerHTML = '<div class="card">Still waiting on Google (first load of the day can take 20–30 seconds). If nothing appears in a minute, press Refresh.</div>'; }, 15000);
-  google.script.run.withSuccessHandler(d => { clearTimeout(slow); DATA = d; render(); $('#stamp').textContent = 'Updated ' + String(d.generated).replace(/^.*, /, ''); $('#stamp').title = d.generated; })
+  google.script.run.withSuccessHandler(d => { clearTimeout(slow); DATA = d; if (CLIENT.name) clientFetch(); render(); $('#stamp').textContent = 'Updated ' + String(d.generated).replace(/^.*, /, ''); $('#stamp').title = d.generated; })
     .withFailureHandler(e => { clearTimeout(slow); $('#stamp').textContent = 'Could not load'; $('#main').innerHTML = '<div class="card err">Could not load: ' + esc(e.message) + '</div>'; }).getData(KEY);
 }
 
 function call(fn, args, okMsg) {
   if (busy) return; busy = true;
   document.body.style.cursor = 'progress';
-  google.script.run.withSuccessHandler(() => { busy = false; document.body.style.cursor = ''; toast(okMsg || 'Saved'); load(); })
+  google.script.run.withSuccessHandler(r => { busy = false; document.body.style.cursor = ''; toast((r && r.msg) || okMsg || 'Saved', r && r.msg ? 6000 : undefined); load(); })
     .withFailureHandler(e => { busy = false; document.body.style.cursor = ''; toast('Not saved: ' + e.message, 6000); load(); })[fn].apply(null, [KEY].concat(args));
 }
 
-function setTab(t) { TAB = t; try { localStorage.setItem('hubTab', t); } catch (e) {} render(); }
+function setTab(t) { CLIENT.name = ''; TAB = t; try { localStorage.setItem('hubTab', t); } catch (e) {} render(); }
 
 function render() {
   try { draw(); } catch (err) { $('#main').innerHTML = '<div class="card err">Display problem: ' + esc(err.message) + '. Press Refresh; if it repeats, tell Claude.</div>'; }
@@ -287,13 +290,49 @@ function draw() {
     ? `Today's reading (${esc(r.date)}): <a href="${esc(r.url)}" target="_blank">${esc(r.passage)}</a>${r.bonus ? ' · Bonus: ' + esc(r.bonus) : ''}`
     : `Today's reading: <a href="${esc(r.url || 'https:\/\/valleycreek.plus/readingplan')}" target="_blank">open the reading plan</a> <span class="meta">(couldn't read today's entry)</span>`;
   const m = $('#main');
-  if (TAB === 'home') m.innerHTML = homeHtml(DATA.home);
+  if (CLIENT.name) m.innerHTML = clientHtml();
+  else if (TAB === 'home') m.innerHTML = homeHtml(DATA.home);
   else if (TAB === 'business') m.innerHTML = bizHtml(DATA.business);
   else if (TAB === 'visits') m.innerHTML = visitsHtml(DATA.business);
   else if (TAB === 'pipeline') m.innerHTML = pipelineHtml(DATA.business);
   else if (TAB === 'review') m.innerHTML = reviewHtml(DATA.business);
   else if (TAB === 'team') m.innerHTML = teamHtml(DATA.business);
   else m.innerHTML = healthHtml(DATA.health);
+}
+
+/* ---------- client page: everything about one client ---------- */
+
+const CLIENT = { name: '', data: null, err: '', more: false };
+function clientLink(n) { n = String(n || '').trim(); return n ? `<a class="clink" data-n="${esc(n)}" onclick="event.stopPropagation();openClient(this.dataset.n)">${esc(n)}</a>` : ''; }
+function openClient(n) { CLIENT.name = String(n).replace(/\s*#\w+/g, '').trim(); CLIENT.data = null; CLIENT.err = ''; CLIENT.more = false; window.scrollTo(0, 0); render(); clientFetch(); }
+function clientFetch() {
+  const n = CLIENT.name;
+  google.script.run.withSuccessHandler(d => { if (CLIENT.name === n) { CLIENT.data = d; render(); } })
+    .withFailureHandler(e => { CLIENT.err = e.message; render(); }).clientView(KEY, n);
+}
+function clientHtml() {
+  const back = `<button type="button" class="small" onclick="setTab(TAB)">← Back</button> `;
+  const d = CLIENT.data;
+  if (CLIENT.err) return card(back + esc(CLIENT.name), null, `<div class="err">Could not load: ${esc(CLIENT.err)}</div>`, 'wide hero');
+  if (!d) return card(back + esc(CLIENT.name), null, '<div class="sub">Pulling everything on this client…</div>', 'wide hero');
+  ['phones', 'emails', 'leads', 'followups', 'tasks', 'visits', 'timeline'].forEach(k => { d[k] = d[k] || []; });
+  const b = DATA.business || {}, openT = new Set(d.tasks.filter(t => t.open).map(t => t.id));
+  const ph = d.phones.map(p => { const t = p.replace(/[^\d]/g, ''); return `${esc(p)} · <a href="tel:+1${t}">call</a> · <a href="sms:+1${t}">text</a>`; }).join('<br>');
+  const head = (ph ? ph + '<br>' : '') + d.emails.map(e => `<a href="mailto:${esc(e)}">${esc(e)}</a>`).join('<br>') + (d.address ? `<br>${esc(d.address)} ${mapLink(d.address)}` : '') || '<span class="sub">No phone or email on file.</span>';
+  const openLeads = d.leads.filter(l => l.open), openFu = d.followups.filter(f => f.open);
+  const tasks = (b.all || []).filter(t => openT.has(t.id)), visits = d.visits.filter(v => v.status === 'Scheduled');
+  const nOpen = openLeads.length + openFu.length + tasks.length + visits.length;
+  const now = openLeads.map(l => leadItem(l)).join('') + openFu.map(f => fuItem(f)).join('') + tasks.map(t => taskItem('business', t)).join('') + visits.map(v => visitItem(v)).join('');
+  const dup = tasks.length + openFu.filter(f => !isWin(f)).length > 1 ? '<div class="why">More than one open item for this client. Check for duplicates and close the extras.</div>' : '';
+  const closed = d.followups.filter(f => !f.open).length + d.leads.filter(l => !l.open).length + d.tasks.filter(t => !t.open).length;
+  const tl = CLIENT.more ? d.timeline : d.timeline.slice(0, 20);
+  const hist = tl.map(e => `<div class="nline"><b>${esc(e.when)}</b> ${e.icon} ${esc(e.text)}${e.sub ? `<div class="sub">${esc(e.sub)}</div>` : ''}</div>`).join('');
+  const photos = d.visits.filter(v => v.photos).map(v => `<a href="${esc(v.photos)}" target="_blank">📷 ${esc(nice(v.date))} visit photos ↗</a>`).join('<br>');
+  return card(back + esc(d.name), null, head + (photos ? '<div style="margin-top:8px">' + photos + '</div>' : ''), 'wide hero') +
+    card('Open now', nOpen, dup + (now || empty('Nothing open for this client.')), 'wide') +
+    card('History', d.timeline.length, (hist ? `<div class="tl">${hist}</div>` : empty('No history yet.')) +
+      (d.timeline.length > 20 && !CLIENT.more ? `<button type="button" class="link" onclick="CLIENT.more=true;render()">Show all ${d.timeline.length}</button>` : '') +
+      (closed ? `<div class="sub" style="margin-top:6px">${closed} closed item${closed === 1 ? '' : 's'} are included above.</div>` : ''), 'wide');
 }
 
 /* ---------- building blocks ---------- */
@@ -419,7 +458,7 @@ function taskItem(side, t, tag) {
     <input type="checkbox" title="${CREW() ? 'Done (goes to Justin to check)' : 'Mark done'}" onclick="this.disabled=true;call('taskAction',['${side}','${id}','done'],CREW() ? 'Sent to Justin to check ✓' : 'Done ✓')">
     <div class="body tap" onclick="tog(event,'a-${key}')">
       <div class="title ${t.pri === 1 ? 'p1' : ''}">${tag ? badge(tag) + ' ' : ''}${esc(t.title)}</div>
-      <div class="sub">${date ? `<span class="${t.overdue ? 'late' : ''}">${nice(date)}</span> · ` : ''}${from}${esc(t.owner || 'Unassigned')}${t.cat ? ' · ' + esc(t.cat) : ''}${t.instr ? ' · 📋' : ''}${t.photos ? ' · 📷' : ''}</div>
+      <div class="sub">${date ? `<span class="${t.overdue ? 'late' : ''}">${nice(date)}</span> · ` : ''}${t.cust ? clientLink(t.cust) + ' · ' : ''}${from}${esc(t.owner || 'Unassigned')}${t.cat ? ' · ' + esc(t.cat) : ''}${t.instr ? ' · 📋' : ''}${t.photos ? ' · 📷' : ''}</div>
       ${t.why ? `<span class="why">${esc(t.why)}</span>` : ''}
       ${t.next ? `<div class="next">→ ${esc(t.next)}</div>` : ''}
       <div class="actions" id="a-${key}">
@@ -503,7 +542,7 @@ function fuItem(f, tag) {
   const id = esc(f.id), key = 'f-' + id + (tag ? '-' + tag : '');
   tag = tag || (isWin(f) ? 'Last try' : '');
   return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
-    <div class="title">${tag ? badge(tag) + ' ' : ''}${esc(f.client)} <span class="sub">— ${esc(/win-back/i.test(f.type) ? 'lost lead, one spring check-in' : /re-engage/i.test(f.type) ? 'stale client, one check-in' : f.type)}</span></div>
+    <div class="title">${tag ? badge(tag) + ' ' : ''}${clientLink(f.client)} <span class="sub">— ${esc(/win-back/i.test(f.type) ? 'lost lead, one spring check-in' : /re-engage/i.test(f.type) ? 'stale client, one check-in' : f.type)}</span></div>
     <div class="sub">${f.state === 'Last try sent' ? `Waiting for a reply · auto-archives ${nice(f.due)}` : f.state === 'Replied' ? '<span class="late">They answered — next step?</span>' : `<span class="${f.overdue ? 'late' : ''}">${nice(f.due)}</span>`} · ${esc(f.owner || 'Unassigned')}${f.phone ? ` · <a href="tel:${esc(f.phone)}">call</a> · <a href="sms:${esc(f.phone)}">text</a>` : ''}${f.email ? ` · <a href="mailto:${esc(f.email)}">email</a>` : ''}</div>
     ${f.context ? `<div class="next">${esc(f.context)}</div>` : ''}
     ${f.recent ? `<div class="notes">Recent: ${esc(f.recent)}</div>` : ''}
@@ -531,7 +570,7 @@ function leadItem(l, tag) {
   const id = esc(l.id), key = 'l-' + id + (tag ? '-' + tag : '');
   const stages = STAGES.indexOf(l.stage) < 0 ? STAGES.concat([l.stage]) : STAGES;
   return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
-    <div class="title">${tag ? badge(tag) + ' ' : ''}${esc(l.client)} <span class="sub">— ${esc(l.job)}</span></div>
+    <div class="title">${tag ? badge(tag) + ' ' : ''}${clientLink(l.client)} <span class="sub">— ${esc(l.job)}</span></div>
     <div class="sub">${l.next ? `<span class="${l.overdue ? 'late' : ''}">${nice(l.next)}</span> · ` : 'No date · '}${esc(l.stage)} · ${esc(l.owner || 'Unassigned')}${l.phone ? ` · <a href="tel:${esc(l.phone)}">call</a> · <a href="sms:${esc(l.phone)}">text</a>` : ''}${l.email ? ` · <a href="mailto:${esc(l.email)}">email</a>` : ''}</div>
     ${l.action ? `<div class="next">→ ${esc(l.action)}</div>` : ''}
     <div class="actions" id="${key}">
@@ -566,7 +605,7 @@ function suggestItem(x) {
 function inboxItem(x, tag) {
   if (x.kind === 'Visit suggestion') return suggestItem(x);
   const id = esc(x.id), key = 'i-' + id + (tag ? '-' + tag : '');
-  const who = x.name ? `${esc(x.name)} <span class="sub">${esc(x.from)}</span>` : esc(x.from);
+  const who = x.name ? `${clientLink(x.name)} <span class="sub">${esc(x.from)}</span>` : esc(x.from);
   return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
     <div class="title">${tag ? badge(tag) + ' ' : ''}${KIND_ICON[x.kind] || '•'} ${who}</div>
     <div class="sub"><span class="${x.ageH >= 24 ? 'late' : ''}">${esc(x.when)}</span> · ${esc(x.kind)}${x.line ? ' · ' + esc(x.line) : ''} · ${esc(x.owner || 'Unassigned')}${x.match ? ' · ' + esc(x.match) : ''}${x.phone ? ` · <a href="tel:${esc(x.phone)}">call</a> · <a href="sms:${esc(x.phone)}">text</a>` : ''}${x.link ? ` · <a href="${esc(x.link)}" target="_blank">open</a>` : ''}</div>
@@ -598,7 +637,7 @@ function mapLink(addr) { return addr ? `<a href="${'https:\/\/maps.google.com/?q
 function visitItem(v, tag) {
   const id = esc(v.id), key = 'v-' + id + (tag ? '-' + tag : '');
   return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
-    <div class="title">${tag ? badge(tag) + ' ' : ''}📍 ${esc(v.client)}</div>
+    <div class="title">${tag ? badge(tag) + ' ' : ''}📍 ${clientLink(v.client)}</div>
     <div class="sub"><span class="${v.today || (v.past && v.status === 'Scheduled') ? 'late' : ''}">${v.today ? 'Today' : nice(v.date)}${v.past && v.status === 'Scheduled' ? ' — tap Done if it happened' : ''}${v.time ? ' ' + esc(v.time) : ''}</span> · ${esc(v.owner)}${v.photos ? ' · 📷' : ''}${v.status !== 'Scheduled' ? ' · ' + esc(v.status) : ''}${v.address ? ' · ' + mapLink(v.address) : ''}${v.phone ? ` · <a href="tel:${esc(v.phone)}">call</a>` : ''}</div>
     ${v.purpose ? `<div class="next">${esc(v.purpose)}</div>` : ''}
     <div class="actions" id="${key}">
