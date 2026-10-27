@@ -469,18 +469,18 @@ function homeHtml(h) {
 const isWin = f => /win-back|re-engage/i.test(f.type);
 function fuItem(f, tag) {
   const id = esc(f.id), key = 'f-' + id + (tag ? '-' + tag : '');
-  tag = tag || (isWin(f) ? (/re-engage/i.test(f.type) ? 'Re-engage' : 'Win-back') : '');
+  tag = tag || (isWin(f) ? 'Last try' : '');
   return `<div class="item"><div class="body tap" onclick="tog(event,'${key}')">
     <div class="title">${tag ? badge(tag) + ' ' : ''}${esc(f.client)} <span class="sub">— ${esc(/win-back/i.test(f.type) ? 'lost lead, one spring check-in' : /re-engage/i.test(f.type) ? 'stale client, one check-in' : f.type)}</span></div>
-    <div class="sub"><span class="${f.overdue ? 'late' : ''}">${nice(f.due)}</span> · ${esc(f.owner || 'Unassigned')}${f.phone ? ` · <a href="tel:${esc(f.phone)}">call</a> · <a href="sms:${esc(f.phone)}">text</a>` : ''}${f.email ? ` · <a href="mailto:${esc(f.email)}">email</a>` : ''}</div>
+    <div class="sub">${f.state === 'Last try sent' ? `Waiting for a reply · auto-archives ${nice(f.due)}` : f.state === 'Replied' ? '<span class="late">They answered — next step?</span>' : `<span class="${f.overdue ? 'late' : ''}">${nice(f.due)}</span>`} · ${esc(f.owner || 'Unassigned')}${f.phone ? ` · <a href="tel:${esc(f.phone)}">call</a> · <a href="sms:${esc(f.phone)}">text</a>` : ''}${f.email ? ` · <a href="mailto:${esc(f.email)}">email</a>` : ''}</div>
     ${f.context ? `<div class="next">${esc(f.context)}</div>` : ''}
     ${f.recent ? `<div class="notes">Recent: ${esc(f.recent)}</div>` : ''}
     <div class="actions" id="${key}">
       ${notesHtml(f.notes)}${histBtn(f.id)}
-      ${isWin(f) ? `<div class="decide"><span class="sub">No interest or no answer?</span><button type="button" class="small primary" onclick="if(this.dataset.ok){call('followupEdit',['${id}',{archive:true}],'Archived — no more follow-ups')}else{this.dataset.ok=1;this.textContent='Sure? Archive'}">Archive</button></div>` : ''}
+      ${isWin(f) ? `<div class="decide"><span class="sub">Done with them?</span><button type="button" class="small primary" onclick="if(this.dataset.ok){call('followupEdit',['${id}',{archive:true}],'Archived — no more follow-ups')}else{this.dataset.ok=1;this.textContent='Sure? Archive'}">Archive</button></div>` : ''}
       <form class="edit" onsubmit="event.preventDefault();call('logFollowup',['${id}',this.m.value,this.o.value,this.n.value],'Follow-up logged')">
         <label>How<select name="m"><option>Call</option><option>Text</option><option>Email</option><option>In person</option></select></label>
-        <label>Outcome<select name="o"><option>Happy</option><option>Issue to fix</option><option>New work</option><option>No answer</option><option>Not interested</option><option>Won</option><option>Lost</option></select></label>
+        <label>Outcome<select name="o">${isWin(f) ? '<option value="No answer">Reached out, no reply yet (auto-archives in 14 days)</option><option value="New work">Interested</option><option value="Not interested">Not interested (archive)</option>' : '<option>Happy</option><option>Issue to fix</option><option>New work</option><option>No answer</option><option>Not interested</option><option>Won</option><option>Lost</option>'}</select></label>
         <label class="full">Note<input type="text" name="n" placeholder="What was said (optional)"></label>
         <button class="small primary full">Log it (done)</button>
       </form>
@@ -637,7 +637,7 @@ function priorityList(b, who) {
   b.followups.filter(f => mine(f.owner) && f.due <= DATA.today).forEach(f => {
     const n = daysLate(f.due), first = /new lead|call back/i.test(f.type);
     const s = first ? 1000 + n * 5 : n > 0 ? 830 + Math.min(n, 30) * 5 : 750;
-    add('f:' + f.id, s + (/estimate|quote/i.test(f.type) ? 40 : 0), first ? 'Call back' : isWin(f) ? (/re-engage/i.test(f.type) ? 'Re-engage' : 'Win-back') : /quote/i.test(f.type) ? 'Quote' : 'Follow-up', first ? 'hot' : '', f.client + (f.type ? ' — ' + f.type : ''), whenChip(f.due), first ? 'First contact' : '', () => fuItem(f));
+    add('f:' + f.id, s + (/estimate|quote/i.test(f.type) ? 40 : 0), first ? 'Call back' : isWin(f) ? 'Last try' : /quote/i.test(f.type) ? 'Quote' : 'Follow-up', first ? 'hot' : '', f.client + (f.type ? ' — ' + f.type : ''), whenChip(f.due), first ? 'First contact' : '', () => fuItem(f));
   });
   (b.all || []).filter(t => mine(t.owner)).forEach(t => {
     if (t.state === 'review') return add('t:' + t.id, 800, 'Decide', 'dec', t.title, { t: 'Decide', late: false }, t.why, () => taskItem('business', t));
@@ -691,7 +691,7 @@ function pipelineHtml(b) {
   return (inbox.length ? card('Unanswered calls &amp; texts', inbox.length, listBlock('inbox', mineFirst(inbox), x => inboxItem(x), ''), 'wide warnc') : '') +
     card('Leads', myLeads.length, listBlock('myleads', myLeads, l => leadItem(l), 'No leads for you to touch.') + team(otherLeads, "Team's leads", l => leadItem(l)), '', 'f-leads') +
     card('Follow-ups', myFu.length, listBlock('myfu', myFu, f => fuItem(f), 'No follow-ups due soon.') + team(otherFu, "Team's follow-ups", f => fuItem(f)) +
-      (wins.length ? `<h3>Win-backs &amp; re-engage (one check-in each)</h3>${listBlock('wins', myWins, f => fuItem(f), 'None of yours.', 3)}${team(otherWins, "Team's win-backs", f => fuItem(f))}` : ''), '', 'f-fu');
+      (wins.length ? `<h3>Last tries (one check-in each, then they archive themselves)</h3>${listBlock('wins', myWins, f => fuItem(f), 'None of yours.', 3)}${team(otherWins, "Team's win-backs", f => fuItem(f))}` : ''), '', 'f-fu');
 }
 
 /* ---------- photos: in-hub camera (stays open; every shot uploads to the visit's Drive folder) ---------- */
