@@ -783,12 +783,23 @@ function pipelineHtml(b) {
 
 /* ---------- Money: unpaid invoices (from Yardbook's Invoice report) ---------- */
 
+function collectedHtml(b) {
+  const c = b.collected || {}; if (c.error) return errBox(c);
+  const items = c.items || [], open = items.filter(x => !x.done), done = items.filter(x => x.done);
+  const row = x => `<div class="item"><input type="checkbox" title="Entered in Yardbook" ${x.done ? 'checked' : ''} onclick="call('collectedEdit',[${x.row},{done:this.checked}],this.checked?'Marked entered':'Marked not entered')">
+    <div class="body"><div class="title">${x.client ? clientLink(x.client) : esc(x.raw)}${x.client && x.client.toLowerCase() !== x.raw.toLowerCase() ? ` <span class="sub">(texted "${esc(x.raw)}")</span>` : ''}${x.kind ? ' · ' + esc(x.kind) : ''}</div>
+    <div class="sub">${esc(x.when)} · ${esc(x.by)}${x.note ? ' · ' + esc(x.note) : ''}</div></div></div>`;
+  return card('Collected in the field', open.length || null,
+    `<div class="sub" style="margin-bottom:6px">Cash and checks the crew picked up (from their "Collected from…" texts to the office line). Tick each one once the payment is entered in Yardbook.</div>` +
+    (open.length ? open.map(row).join('') : empty('Nothing waiting to be entered.')) +
+    (done.length ? `<details><summary>Entered (last 60 days: ${done.length})</summary>${done.map(row).join('')}</details>` : ''), 'wide');
+}
 function moneyHtml(b) {
   if (!b || b.error) return errBox(b || { error: 'No data' });
   const m = b.money || {};
   const how = `<div class="sub" style="margin-top:8px">From Yardbook's Invoice report${m.source ? ': ' + esc(m.source) : ''}. To refresh it, run the Invoice report in Yardbook (Reports → Invoice, Jan 1 to today) and have it emailed. The hub picks up the newest one within the hour.</div>`;
   if (m.error) return errBox(m);
-  if (m.none) return card('Chasing money', null, empty('No invoice report yet.') + how, 'wide hero');
+  if (m.none) return collectedHtml(b) + card('Chasing money', null, empty('No invoice report yet.') + how, 'wide hero');
   const money = n => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const late = m.items.filter(x => x.age > 0), notYet = m.items.filter(x => x.age <= 0);
   const byClient = list => { const g = {}; list.forEach(x => { (g[x.client] = g[x.client] || []).push(x); }); return Object.keys(g).map(k => ({ client: k, inv: g[k], bal: g[k].reduce((s, x) => s + x.bal, 0), age: Math.max.apply(null, g[k].map(x => x.age)) })).sort((a, c) => c.age - a.age || c.bal - a.bal); };
@@ -799,7 +810,7 @@ function moneyHtml(b) {
       <div class="sub">${esc(what)}${ph ? ` · <a href="tel:${esc(ph)}">call</a> · <a href="sms:${esc(ph)}">text</a>` : ''}${em ? ` · <a href="mailto:${esc(em)}">email</a>` : ''}</div></div>
       <button type="button" class="small" data-t="${esc(t)}" onclick="call('addTask',['business',this.dataset.t,'${DATA.today}','Alex','Clients & Jobs','Payment reminder — check Yardbook, then text or call.'],'Chase task added for Alex')">Chase</button></div>`; };
   const lc = byClient(late), nc = byClient(notYet);
-  return card('Chasing money', null, `<div style="font-size:22px;font-weight:600">${money(m.total)} unpaid</div><div class="sub">${money(late.reduce((s, x) => s + x.bal, 0))} past due across ${lc.length} client${lc.length === 1 ? '' : 's'}</div>` +
+  return collectedHtml(b) + card('Chasing money', null, `<div style="font-size:22px;font-weight:600">${money(m.total)} unpaid</div><div class="sub">${money(late.reduce((s, x) => s + x.bal, 0))} past due across ${lc.length} client${lc.length === 1 ? '' : 's'}</div>` +
       (m.missing && m.missing.length ? `<div class="why">Couldn't find these columns in the report: ${esc(m.missing.join(', '))}. Tell Claude.</div>` : '') + how, 'wide hero') +
     card('Past due', lc.length, lc.map(row).join('') || empty('Nothing past due.'), 'wide') +
     (nc.length ? card('Not due yet', nc.length, `<details><summary>Show ${nc.length}</summary>${nc.map(row).join('')}</details>`, 'wide') : '');
