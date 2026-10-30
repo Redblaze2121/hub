@@ -324,18 +324,21 @@ function clientHtml() {
   ['phones', 'emails', 'leads', 'followups', 'tasks', 'visits', 'timeline'].forEach(k => { d[k] = d[k] || []; });
   const b = DATA.business || {}, openT = new Set(d.tasks.filter(t => t.open).map(t => t.id));
   const ph = d.phones.map(p => { const t = p.replace(/[^\d]/g, ''); return `${esc(p)} · <a href="tel:+1${t}">call</a> · <a href="sms:+1${t}">text</a>`; }).join('<br>');
-  const head = (ph ? ph + '<br>' : '') + d.emails.map(e => `<a href="mailto:${esc(e)}">${esc(e)}</a>`).join('<br>') + (d.address ? `<br>${esc(d.address)} ${mapLink(d.address)}` : '') || '<span class="sub">No phone or email on file.</span>';
+  const head = ((ph ? ph + '<br>' : '') + d.emails.map(e => `<a href="mailto:${esc(e)}">${esc(e)}</a>`).join('<br>') + (d.address ? `<br>${esc(d.address)} ${mapLink(d.address)}` : '') || '<span class="sub">No phone or email on file.</span>') +
+    (d.notes ? `<div class="sub" style="margin-top:6px">📝 ${esc(d.notes)}</div>` : '');
   const openLeads = d.leads.filter(l => l.open), openFu = d.followups.filter(f => f.open);
   const tasks = (b.all || []).filter(t => openT.has(t.id)), visits = d.visits.filter(v => v.status === 'Scheduled');
   const nOpen = openLeads.length + openFu.length + tasks.length + visits.length;
   const now = openLeads.map(l => leadItem(l)).join('') + openFu.map(f => fuItem(f)).join('') + tasks.map(t => taskItem('business', t)).join('') + visits.map(v => visitItem(v)).join('');
-  const dup = tasks.length + openFu.filter(f => !isWin(f)).length > 1 ? '<div class="why">More than one open item for this client. Check for duplicates and close the extras.</div>' : '';
+  const dup = !CREW() && tasks.length + openFu.filter(f => !isWin(f)).length > 1 ? '<div class="why">More than one open item for this client. Check for duplicates and close the extras.</div>' : '';
+  const past = CREW() ? d.visits.filter(v => v.status !== 'Scheduled').slice(0, 5) : [];
   const closed = d.followups.filter(f => !f.open).length + d.leads.filter(l => !l.open).length + d.tasks.filter(t => !t.open).length;
   const tl = CLIENT.more ? d.timeline : d.timeline.slice(0, 20);
   const hist = tl.map(e => `<div class="nline"><b>${esc(e.when)}</b> ${e.icon} ${esc(e.text)}${e.sub ? `<div class="sub">${esc(e.sub)}</div>` : ''}</div>`).join('');
   const photos = d.visits.filter(v => v.photos).map(v => `<a href="${esc(v.photos)}" target="_blank">📷 ${esc(nice(v.date))} visit photos ↗</a>`).join('<br>');
   return card(back + esc(d.name), null, head + (photos ? '<div style="margin-top:8px">' + photos + '</div>' : ''), 'wide hero') +
-    card('Open now', nOpen, dup + (now || empty('Nothing open for this client.')), 'wide') +
+    card(CREW() ? 'My work here' : 'Open now', nOpen, dup + (now || empty(CREW() ? 'Nothing of yours is open for this client.' : 'Nothing open for this client.')), 'wide') +
+    (past.length ? card('Past visits', past.length, past.map(v => `<div class="nline"><b>${esc(nice(v.date))}</b> ${esc(v.status)} — ${esc(v.purpose || '')}${v.owner ? ` <span class="sub">(${esc(v.owner)})</span>` : ''}${v.photos ? ` · <a href="${esc(v.photos)}" target="_blank">📷 photos ↗</a>` : ''}${v.notes ? `<div class="sub">${esc(v.notes)}</div>` : ''}</div>`).join(''), 'wide') : '') +
     card('History', d.timeline.length, (hist ? `<div class="tl">${hist}</div>` : empty('No history yet.')) +
       (d.timeline.length > 20 && !CLIENT.more ? `<button type="button" class="link" onclick="CLIENT.more=true;render()">Show all ${d.timeline.length}</button>` : '') +
       (closed ? `<div class="sub" style="margin-top:6px">${closed} closed item${closed === 1 ? '' : 's'} are included above.</div>` : ''), 'wide');
