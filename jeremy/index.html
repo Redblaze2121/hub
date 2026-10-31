@@ -54,6 +54,9 @@
   .ev .t { width: 70px; flex: none; color: var(--quiet); font-size: 13px; padding-top: 1px; }
   .ev.social .title { color: var(--soc); }
   .ev .cal { color: var(--quiet); font-size: 12px; }
+  .search input { font: inherit; font-size: 14px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card, #fff); color: inherit; width: 220px; max-width: 48vw; }
+  .hit .where { font-size: 12px; color: var(--muted, #777); text-transform: uppercase; letter-spacing: .02em; }
+  .hit mark { background: #ffe58a; color: inherit; border-radius: 2px; }
   .clink { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
   .tl { border-left: 2px solid var(--line); margin-left: 6px; padding-left: 12px; }
   .tl .nline { margin-bottom: 8px; }
@@ -145,6 +148,7 @@
   <div class="tabs" id="tabs"></div>
   <div class="spacer"></div>
   <a class="voice" id="voicebtn" style="display:none" target="_blank" title="Talk to Claude about the hub (opens the Claude app)">Claude app ↗</a>
+  <form class="search" onsubmit="event.preventDefault();openSearch(this.q.value)"><input name="q" type="search" placeholder="Search texts, emails, notes…" autocomplete="off" aria-label="Search the hub"></form>
   <span class="meta" id="stamp">Loading…</span>
   <button class="small" onclick="load(true)" title="Refresh">↻</button>
   <button class="small" id="healthBtn" onclick="setTab('health')" title="Automation health" style="display:none">♥</button>
@@ -277,7 +281,7 @@ function call(fn, args, okMsg) {
     .withFailureHandler(e => { busy = false; document.body.style.cursor = ''; toast('Not saved: ' + e.message, 6000); load(); })[fn].apply(null, [KEY].concat(args));
 }
 
-function setTab(t) { CLIENT.name = ''; TAB = t; try { localStorage.setItem('hubTab', t); } catch (e) {} render(); }
+function setTab(t) { CLIENT.name = ''; SEARCH.q = ''; TAB = t; try { localStorage.setItem('hubTab', t); } catch (e) {} render(); }
 
 function render() {
   try { draw(); } catch (err) { $('#main').innerHTML = '<div class="card err">Display problem: ' + esc(err.message) + '. Press Refresh; if it repeats, tell Claude.</div>'; }
@@ -295,7 +299,8 @@ function draw() {
     ? `Today's reading (${esc(r.date)}): <a href="${esc(r.url)}" target="_blank">${esc(r.passage)}</a>${r.bonus ? ' · Bonus: ' + esc(r.bonus) : ''}`
     : `Today's reading: <a href="${esc(r.url || 'https:\/\/valleycreek.plus/readingplan')}" target="_blank">open the reading plan</a> <span class="meta">(couldn't read today's entry)</span>`;
   const m = $('#main');
-  if (CLIENT.name) m.innerHTML = clientHtml();
+  if (SEARCH.q) m.innerHTML = searchHtml();
+  else if (CLIENT.name) m.innerHTML = clientHtml();
   else if (TAB === 'home') m.innerHTML = homeHtml(DATA.home);
   else if (TAB === 'business') m.innerHTML = bizHtml(DATA.business);
   else if (TAB === 'visits') m.innerHTML = visitsHtml(DATA.business);
@@ -310,11 +315,29 @@ function draw() {
 
 const CLIENT = { name: '', data: null, err: '', more: false };
 function clientLink(n) { n = String(n || '').trim(); return n ? `<a class="clink" data-n="${esc(n)}" onclick="event.stopPropagation();openClient(this.dataset.n)">${esc(n)}</a>` : ''; }
-function openClient(n) { CLIENT.name = String(n).replace(/\s*#\w+/g, '').trim(); CLIENT.data = null; CLIENT.err = ''; CLIENT.more = false; window.scrollTo(0, 0); render(); clientFetch(); }
+function openClient(n) { SEARCH.q = ''; CLIENT.name = String(n).replace(/\s*#\w+/g, '').trim(); CLIENT.data = null; CLIENT.err = ''; CLIENT.more = false; window.scrollTo(0, 0); render(); clientFetch(); }
 function clientFetch() {
   const n = CLIENT.name;
   google.script.run.withSuccessHandler(d => { if (CLIENT.name === n) { CLIENT.data = d; render(); } })
     .withFailureHandler(e => { CLIENT.err = e.message; render(); }).clientView(KEY, n);
+}
+const SEARCH = { q: '', data: null, err: '' };
+function openSearch(q) { q = String(q || '').trim(); if (q.length < 2) return; SEARCH.q = q; SEARCH.data = null; SEARCH.err = ''; CLIENT.name = ''; window.scrollTo(0, 0); render();
+  google.script.run.withSuccessHandler(d => { if (SEARCH.q === q) { SEARCH.data = d; render(); } }).withFailureHandler(e => { SEARCH.err = e.message; render(); }).searchAll(KEY, q); }
+function closeSearch() { SEARCH.q = ''; SEARCH.data = null; render(); }
+function hl(text) { let h = esc(text); const terms = (/^"(.+)"$/.exec(SEARCH.q) ? [RegExp.$1] : SEARCH.q.split(/\s+/)).filter(Boolean);
+  terms.forEach(t => { try { h = h.replace(new RegExp('(' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig'), '<mark>$1</mark>'); } catch (e) {} }); return h; }
+function searchHtml() {
+  const back = `<button type="button" class="small" onclick="closeSearch()">← Back</button> `;
+  const d = SEARCH.data;
+  if (SEARCH.err) return card(back + 'Search: ' + esc(SEARCH.q), null, `<div class="err">${esc(SEARCH.err)}</div>`, 'wide hero');
+  if (!d) return card(back + 'Search: ' + esc(SEARCH.q), null, '<div class="sub">Looking through texts, emails, notes…</div>', 'wide hero');
+  const who = d.clients.length ? `<div class="sub" style="margin-top:6px">Mentioned: ${d.clients.map(c => clientLink(c.name) + ` <span class="sub">${c.n}</span>`).join(' · ')}</div>` : '';
+  const items = d.hits.map(h => `<div class="item hit"><div class="body"><div class="where">${esc(h.where)}${h.open ? ' · open' : ''}${h.id ? ' · ' + esc(h.id) : ''}</div>
+      <div class="title">${h.client ? clientLink(h.client) + ' — ' : ''}${hl(h.text)}</div>
+      <div class="sub">${esc(h.when)}${h.sub ? ' · ' + hl(h.sub) : ''}${h.link ? ` · <a href="${esc(h.link)}" target="_blank">open ↗</a>` : ''}</div></div></div>`).join('');
+  return card(back + 'Search: ' + esc(SEARCH.q), d.total, `<div class="sub">${d.total} hit${d.total === 1 ? '' : 's'}${d.total > d.hits.length ? ', newest ' + d.hits.length + ' shown — add a word to narrow it' : ''}. Put a phrase in quotes to match it exactly.</div>` + who, 'wide hero') +
+    card('Results', null, items || empty('Nothing matched. Try fewer words, or a last name only.'), 'wide');
 }
 function clientHtml() {
   const back = `<button type="button" class="small" onclick="setTab(TAB)">← Back</button> `;
