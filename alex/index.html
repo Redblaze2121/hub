@@ -416,6 +416,13 @@ function calHtml(items) {
 
 /* ---------- shared pieces ---------- */
 const SHOW = {};
+/* cap any list at n (default 5) with a Show all / Show less link; `group` renders the shown slice (for month/day headings) */
+function capped(key, items, group, none, n) {
+  n = n || 5;
+  if (!items || !items.length) return empty(none);
+  const all = !!SHOW[key], shown = all ? items : items.slice(0, n);
+  return group(shown) + (items.length > n ? `<button type="button" class="link" onclick="SHOW['${key}']=${all ? 'false' : 'true'};render()">${all ? 'Show less' : 'Show all (' + items.length + ')'}</button>` : '');
+}
 function listBlock(key, items, render, none, n) {
   n = n || 5;
   if (!items || !items.length) return empty(none);
@@ -557,9 +564,9 @@ function homeHtml(h) {
   const recHtml = listBlock('home-rec', rec.items, recItem, 'Nothing coming due.') +
     (rec.untracked.length ? `<details><summary>${rec.untracked.length} not tracked yet — tick the ones done recently</summary>${rec.untracked.map(x => `<div class="item"><input type="checkbox" title="Done today" onclick="this.disabled=true;call('recurringDone',['${esc(x.id)}'],'Tracking started')"><div class="body"><div class="title">${esc(x.title)}</div><div class="sub">every ${esc(x.every)}</div></div></div>`).join('')}</details>` : '');
   const shopItem = s => `<div class="item"><input type="checkbox" title="Bought" data-k="${esc(s.key)}" onclick="this.disabled=true;call('shoppingCheck',[this.dataset.k],'Checked off')"><div class="body"><div class="title">${esc(s.item)}</div>${s.store ? `<div class="sub">${esc(s.store)}</div>` : ''}</div><button class="small" title="Remove (not buying)" data-k="${esc(s.key)}" onclick="call('shoppingRemove',[this.dataset.k,''],'Removed')">✕</button></div>`;
-  const shop = listBlock('home-shop', h.shopping, shopItem, 'List is empty.', 8) +
+  const shop = listBlock('home-shop', h.shopping, shopItem, 'List is empty.') +
     `<form class="row" onsubmit="event.preventDefault();call('shoppingAdd',[this.i.value,this.s.value],'Added');this.reset()"><input type="text" name="i" placeholder="Add item…" required><select name="s"><option value="">Store</option><option>Kroger</option><option>Sam's Club</option><option>H Mart</option><option>Walmart</option><option>Costco</option></select><button class="small primary">Add</button></form>`;
-  const meals = h.meals.length ? h.meals.map(x => `<div class="item"><div class="body"><div class="title">${esc(x.dinner)}</div><div class="sub">Day ${esc(x.day)}${x.notes ? ' · ' + esc(x.notes) : ''}</div></div></div>`).join('') : empty('No meal plan.');
+  const meals = listBlock('home-meals', h.meals, x => `<div class="item"><div class="body"><div class="title">${esc(x.dinner)}</div><div class="sub">Day ${esc(x.day)}${x.notes ? ' · ' + esc(x.notes) : ''}</div></div></div>`, 'No meal plan.');
   return card('Tasks', items.length, tasks) +
     card('Coming up', null, calHtml(h.calendar)) +
     card('House & recurring', rec.items.length, recHtml) +
@@ -814,14 +821,14 @@ function pipelineHtml(b) {
     const L = leads.filter(l => LEAD_KIND(l) === kind), F = fus.filter(f => FU_KIND(f) === kind);
     const all = L.map(l => ({ d: l.next || '0', h: () => leadItem(l), o: l.owner })).concat(F.map(f => ({ d: f.due, h: () => fuItem(f), o: f.owner }))).sort((a, c) => a.d.localeCompare(c.d));
     const mine = all.filter(x => isMine(x.o)), other = all.filter(x => !isMine(x.o));
-    return card(title, mine.length, `<div class="sub" style="margin-bottom:6px">${sub}</div>` + (mine.length ? mine.map(x => x.h()).join('') : empty(none)) + team(other.map(x => x.h), "Team's", h => h()), 'wide', 'f-' + kind);
+    return card(title, mine.length, `<div class="sub" style="margin-bottom:6px">${sub}</div>` + listBlock('pipe-' + kind, mine, x => x.h(), none) + team(other.map(x => x.h), "Team's", h => h()), 'wide', 'f-' + kind);
   };
   const myWins = wins.filter(f => isMine(f.owner)), otherWins = wins.filter(f => !isMine(f.owner));
   return sect('New leads', 'new', 'No new leads for you.', "Haven't booked with us yet and haven't been quoted.") +
     sect('Estimates out', 'est', 'No estimates waiting on you.', 'Quoted, waiting on a yes.') +
     sect('Client follow-ups', 'client', 'No client follow-ups due.', 'Customers who have booked with us.') +
     (wins.length ? card('Last tries', myWins.length, listBlock('wins', myWins, f => fuItem(f), 'None of yours.', 3) + team(otherWins, "Team's", f => fuItem(f)), 'wide') : '') +
-    (nLater ? `<div class="sub" style="margin:4px 4px 12px">Only what's due in the next 7 days is here. ${nLater} more are waiting in <a href="#" onclick="setTab('later');return false">Later</a> and come back here a week before they're due.</div>` : '');
+    (nLater ? `<div class="sub" style="margin:4px 4px 12px">${nLater} more in <a href="#" onclick="setTab('later');return false">Later</a> (not due this week).</div>` : '');
 }
 
 /* ---------- Money: unpaid invoices (from Yardbook's Invoice report) ---------- */
@@ -834,7 +841,7 @@ function collectedHtml(b) {
     <div class="sub">${esc(x.when)} · ${esc(x.by)}${x.note ? ' · ' + esc(x.note) : ''}</div></div></div>`;
   return card('Collected in the field', open.length || null,
     `<div class="sub" style="margin-bottom:6px">Cash and checks the crew picked up (from their "Collected from…" texts to the office line). Tick each one once the payment is entered in Yardbook.</div>` +
-    (open.length ? open.map(row).join('') : empty('Nothing waiting to be entered.')) +
+    listBlock('collected-open', open, row, 'Nothing waiting to be entered.') +
     (done.length ? `<details><summary>Entered (last 60 days: ${done.length})</summary>${done.map(row).join('')}</details>` : ''), 'wide');
 }
 function moneyHtml(b) {
@@ -855,7 +862,7 @@ function moneyHtml(b) {
   const lc = byClient(late), nc = byClient(notYet);
   return collectedHtml(b) + card('Chasing money', null, `<div style="font-size:22px;font-weight:600">${money(m.total)} unpaid</div><div class="sub">${money(late.reduce((s, x) => s + x.bal, 0))} past due across ${lc.length} client${lc.length === 1 ? '' : 's'}</div>` +
       (m.missing && m.missing.length ? `<div class="why">Couldn't find these columns in the report: ${esc(m.missing.join(', '))}. Tell Claude.</div>` : '') + how, 'wide hero') +
-    card('Past due', lc.length, lc.map(row).join('') || empty('Nothing past due.'), 'wide') +
+    card('Past due', lc.length, listBlock('money-late', lc, row, 'Nothing past due.'), 'wide') +
     (nc.length ? card('Not due yet', nc.length, `<details><summary>Show ${nc.length}</summary>${nc.map(row).join('')}</details>`, 'wide') : '');
 }
 
@@ -866,14 +873,14 @@ function laterHtml(b) {
   if (!b || b.error) return errBox(b || { error: 'No data' });
   const team = (list, label, fn) => list.length ? `<details><summary>${label} (${list.length})</summary>${list.map(fn).join('')}</details>` : '';
   const leads = b.leads.filter(l => l.later), fus = b.followups.filter(f => f.later && !isWin(f)), wins = b.followups.filter(f => f.later && isWin(f));
-  const sect = (title, list, fn, none, cls) => { const mine = list.filter(x => isMine(x.owner)), other = list.filter(x => !isMine(x.owner));
-    return card(title, mine.length, (mine.length ? byMonth(mine, fn) : empty(none)) + team(other, "Team's", fn), cls || 'wide'); };
+  const byDate = list => list.slice().sort((a, c) => String(a.due || a.next || '9').localeCompare(String(c.due || c.next || '9')));
+  const sect = (key, title, list, fn, none, cls) => { const mine = byDate(list.filter(x => isMine(x.owner))), other = list.filter(x => !isMine(x.owner));
+    return card(title, mine.length, capped('later-' + key, mine, shown => byMonth(shown, fn), none) + team(other, "Team's", fn), cls || 'wide'); };
   const st = b.stale;
-  return `<div class="sub" style="margin:4px 4px 12px">Not due this week. Each one moves back to Pipeline 7 days before its date.</div>` +
-    sect('Follow-ups (seasonal / later)', fus, f => fuItem(f), 'Nothing scheduled later.') +
-    sect('Leads on hold', leads, l => leadItem(l), 'No leads on hold.') +
-    sect('Last tries (Feb 1 check-ins)', wins, f => fuItem(f), 'None of yours.') +
-    (MODE === 'full' && st && st.left ? '<h2 style="margin:18px 4px 6px">Stale clients to review (' + st.left + ')</h2>' + reviewHtml(b) : '');
+  return sect('fu', 'Follow-ups (seasonal / later)', fus, f => fuItem(f), 'Nothing scheduled later.') +
+    sect('leads', 'Leads on hold', leads, l => leadItem(l), 'No leads on hold.') +
+    sect('wins', 'Last tries (Feb 1 check-ins)', wins, f => fuItem(f), 'None of yours.') +
+    (MODE === 'full' && st && st.left ? reviewHtml(b) : '');
 }
 function byMonth(list, fn) {
   let last = '', h = '';
@@ -952,7 +959,7 @@ function reviewHtml(b) {
   if (!st || st.error) return errBox(st || { error: 'No review list' });
   const q = RV.q.toLowerCase();
   const list = st.items.filter(x => !q || (x.name + ' ' + x.address + ' ' + x.email).toLowerCase().indexOf(q) >= 0);
-  const all = !!SHOW.rv, shown = all ? list : list.slice(0, 15);
+  const all = !!SHOW.rv, shown = all ? list : list.slice(0, 5);
   const row = x => {
     const on = RV.open === x.id, id = esc(x.id);
     const btn = (d, label, cls) => `<button type="button" class="small ${cls || ''}" onclick="rvDo('${id}','${d}',this)">${label}</button>`;
@@ -966,11 +973,11 @@ function reviewHtml(b) {
         </form>
         <div class="decide" style="margin-top:6px">${btn('now', 'Reach out now', 'primary')}${btn('spring', 'Feb 1 check-in')}${btn('active', 'Still a client')}${btn('archive', 'Archive')}${btn('dnc', 'Do not contact')}</div></div>` : '');
   };
-  return card(`Review: stale clients <span class="count">${st.left} of ${st.total} left</span>`, null,
+  return card(`Stale clients to review <span class="count">${st.left} left</span>`, null,
     `<form class="row" onsubmit="event.preventDefault()"><input type="text" placeholder="Search name or street" value="${esc(RV.q)}" oninput="RV.q=this.value;clearTimeout(RV.t);RV.t=setTimeout(()=>{render();const i=document.querySelector('#main input[type=text]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},300)"></form>
-     <p class="sub">Most recently booked first. Tap a name, pick one choice; it drops off this list. "Reach out now" and "Feb 1 check-in" make a Re-engage follow-up.</p>` +
+` +
     (shown.map(row).join('') || empty(st.left ? 'No matches.' : 'All reviewed. Nice.')) +
-    (list.length > 15 ? `<button type="button" class="link" onclick="SHOW.rv=${all ? 'false' : 'true'};render()">${all ? 'Show first 15' : 'Show all ' + list.length}</button>` : ''), 'wide hero');
+    (list.length > 5 ? `<button type="button" class="link" onclick="SHOW.rv=${all ? 'false' : 'true'};render()">${all ? 'Show less' : 'Show all (' + list.length + ')'}</button>` : ''), 'wide');
 }
 function rvDo(id, d, el) {
   const f = document.getElementById('rvf'), args = { owner: f ? f.o.value : '', note: f ? f.n.value : '' };
@@ -985,10 +992,9 @@ function visitsHtml(b) {
   if (!b || b.error) return errBox(b || { error: 'No data' });
   const vs = b.visits || [];
   const up = vs.filter(v => v.status === 'Scheduled'), done = vs.filter(v => v.status !== 'Scheduled');
-  let last = '', list = '';
-  up.forEach(v => { const h = v.past ? 'Not marked done yet' : v.today ? 'Today' : nice(v.date); if (h !== last) { list += `<div class="day">${h}</div>`; last = h; } list += visitItem(v); });
-  return card('Site visits', up.length, (list || empty('None booked.')) + addVisitForm(), 'wide hero') +
-    (done.length ? card('Done (last 3 days)', done.length, done.map(v => visitItem(v)).join(''), '', 'f-vdone') : '') +
+  const byDay = shown => { let last = '', list = ''; shown.forEach(v => { const h = v.past ? 'Not marked done yet' : v.today ? 'Today' : nice(v.date); if (h !== last) { list += `<div class="day">${h}</div>`; last = h; } list += visitItem(v); }); return list; };
+  return card('Site visits', up.length, capped('visits-up', up, byDay, 'None booked.') + addVisitForm(), 'wide hero') +
+    (done.length ? card('Done (last 3 days)', done.length, listBlock('visits-done', done, v => visitItem(v), 'None.'), '', 'f-vdone') : '') +
     card('Calendar', null, calHtml(b.calendar), '', 'f-cal');
 }
 
