@@ -722,7 +722,7 @@ const openFirst = h => h.replace('class="actions"', 'class="actions open"');
 function priorityList(b, who) {
   const out = [], mine = o => ownerIs(who, o);
   const slip = {}; (b.slipping || []).forEach(x => { slip[x.id] = x.why; });
-  const add = (key, s, tag, cls, name, chip, why, full) => out.push({ key: key, s: s, tag: tag, cls: cls, name: name, chip: chip, why: why || slip[key.split(':')[1]] || '', full: full });
+  const add = (key, s, tag, cls, name, chip, why, full, client) => out.push({ key: key, s: s, tag: tag, cls: cls, name: name, chip: chip, why: why || slip[key.split(':')[1]] || '', full: full, client: clientKey(client === undefined ? name : client) });
   if (who === ME() && MODE === 'full' && DATA.health && DATA.health.jobs) DATA.health.jobs.filter(j => j.broken).forEach(j =>
     add('fix:' + j.job, 1200, 'Fix', 'hot', 'Hub: "' + j.job + '" is failing', { t: 'Now', late: true }, j.lastError, () => `<div class="item"><div class="body"><div class="sub">${esc(j.lastError || '')}</div><button class="small primary" onclick="DN.open='';setTab('health')">Open Health</button></div></div>`));
   ((b.inbox && b.inbox.items) || []).filter(x => mine(x.owner)).forEach(x => x.kind === 'Visit suggestion' ?
@@ -731,6 +731,8 @@ function priorityList(b, who) {
     add('in:' + x.id, 1100 + Math.min(x.ageH || 0, 72), x.kind === 'Email lead' ? 'New lead' : x.kind === 'Thumbtack lead' ? 'Thumbtack' : x.kind, 'hot', x.name || x.from, { t: x.ageH >= 48 ? Math.round(x.ageH / 24) + 'd waiting' : x.ageH >= 1 ? x.ageH + 'h ago' : 'Just now', late: x.ageH >= 24 }, 'First contact', () => inboxItem(x)));
   (b.visits || []).filter(v => v.today && v.status === 'Scheduled' && mine(v.owner)).forEach(v =>
     add('v:' + v.id, 1050, 'Visit', '', v.client, { t: v.time || 'Today', late: false }, v.purpose, () => visitItem(v)));
+  (b.visits || []).filter(v => v.past && v.status === 'Scheduled' && mine(v.owner)).forEach(v =>   /* booked, date passed, never marked done: decide here instead of a separate task */
+    add('v:' + v.id, 800, 'Close out?', 'dec', v.client, { t: Math.max(1, daysLate(v.date)) + 'd ago', late: true }, 'Visit ' + nice(v.date) + ' — mark it Done or Cancel it', () => visitItem(v)));
   b.leads.filter(l => mine(l.owner) && !l.later).forEach(l => {
     const first = /initial/i.test(l.stage), n = daysLate(l.next);
     if (l.next && n < 0 && !(first && n >= -1)) return;
@@ -738,8 +740,8 @@ function priorityList(b, who) {
     add('l:' + l.id, s + (/estimate/i.test(l.stage) ? 40 : 0), 'Lead', first ? 'hot' : '', l.client + (l.job ? ' — ' + l.job : ''), whenChip(l.next, 'No date'), first ? 'First contact' : '', () => leadItem(l));
   });
   b.followups.filter(f => mine(f.owner) && !f.later && f.due <= DATA.today).forEach(f => {
-    const n = daysLate(f.due), first = /new lead|call back/i.test(f.type);
-    const s = first ? 1000 + n * 5 : n > 0 ? 830 + Math.min(n, 30) * 5 : 750;
+    const n = daysLate(f.due), first = /new lead|call back/i.test(f.type), stale = isStale(f);
+    const s = stale ? 110 : first ? 1000 + n * 5 : n > 0 ? 830 + Math.min(n, 30) * 5 : 750;   /* stale-client re-engagement sits at the bottom, under everything but long-term work */
     add('f:' + f.id, s + (/estimate|quote/i.test(f.type) ? 40 : 0), first ? 'Call back' : isWin(f) ? 'Last try' : /quote/i.test(f.type) ? 'Quote' : 'Follow-up', first ? 'hot' : '', f.client + (f.type ? ' — ' + f.type : ''), whenChip(f.due), first ? 'First contact' : '', () => fuItem(f));
   });
   (b.all || []).filter(t => mine(t.owner)).forEach(t => {
@@ -748,15 +750,30 @@ function priorityList(b, who) {
     const n = daysLate(t.due);
     let s = t.due && n > 0 ? 780 + Math.min(n, 30) * 4 : t.due && n === 0 ? 720 : t.due && n >= -7 ? 600 + n * 20 : t.pri === 1 ? 450 : t.pri === 2 ? 300 : 100;
     if (t.state === 'schedule') s -= 50;
-    add('t:' + t.id, s, 'Task', '', t.title, whenChip(t.due, ''), '', () => taskItem('business', t));
+    add('t:' + t.id, s, 'Task', '', t.title, whenChip(t.due, ''), '', () => taskItem('business', t), t.cust);
   });
-  return out.sort((a, c) => c.s - a.s);
+  out.sort((a, c) => c.s - a.s);
+  /* one line per client: the most urgent item shows; the rest of that client's items are listed under it when opened */
+  const seen = {}, merged = [];
+  out.forEach(c => {
+    if (!c.client) { merged.push(c); return; }
+    const first = seen[c.client];
+    if (!first) { seen[c.client] = c; c.also = []; merged.push(c); return; }
+    first.also.push(c);
+  });
+  return merged;
 }
+function isStale(f) { return /re-engage|stale/i.test(f.type) || /stale review/i.test(f.source || ''); }
+function clientKey(name) { const n = String(name || '').split(' — ')[0].toLowerCase().replace(/\(.*?\)|#\w+/g, ' ').replace(/[^a-z0-9&' ]+/g, ' ').replace(/\s+/g, ' ').trim(); return n.split(' ').length >= 2 ? n : ''; }
 
 function dnRow(c) {
   const on = DN.open === c.key, k = esc(c.key).replace(/'/g, '');
   return `<div class="dn ${on ? 'on' : ''}" onclick="dnTog('${k}')"><span class="badge ${c.cls}">${esc(c.tag)}</span><span class="nm">${esc(c.name)}</span><span class="dd ${c.chip.late ? 'late' : ''}">${esc(c.chip.t)}</span></div>` +
-    (on ? `<div class="dnx"><div class="xbar"><span class="why"${c.why ? '' : ' style="visibility:hidden"'}>${esc(c.why || '-')}</span><button type="button" class="small" onclick="dnTog('')">▲ Hide</button></div>${openFirst(c.full())}</div>` : '');
+    (on ? `<div class="dnx"><div class="xbar"><span class="why"${c.why ? '' : ' style="visibility:hidden"'}>${esc(c.why || '-')}</span><button type="button" class="small" onclick="dnTog('')">▲ Hide</button></div>${openFirst(c.full())}${alsoBlock(c)}</div>` : '');
+}
+function alsoBlock(c) {
+  if (!c.also || !c.also.length) return '';
+  return `<details class="also"><summary>Also for this client (${c.also.length})</summary>${c.also.map(a => `<div class="dn" onclick="event.stopPropagation()"><span class="badge ${a.cls}">${esc(a.tag)}</span><span class="nm">${esc(a.name)}</span><span class="dd ${a.chip.late ? 'late' : ''}">${esc(a.chip.t)}</span></div>${a.full()}`).join('')}</details>`;
 }
 function dnBlock(list, key, n) {
   if (!list.length) return empty('Nothing urgent. Nice.');
