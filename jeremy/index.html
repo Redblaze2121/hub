@@ -130,6 +130,8 @@
   .cam .shutter:active { background: #fff; }
   .cam .done { background: #fff; color: #000; border: 0; border-radius: 10px; padding: 10px 16px; font-size: 16px; }
   .cam.flash video { opacity: .4; }
+  .cam .shutter.rec { border-color: #e33; background: #e33; }
+  .cam .shutter.on { border-color: #e33; background: #fff; border-radius: 18px; }
   #upbar { position: fixed; left: 8px; bottom: 94px; z-index: 13; background: var(--ink); color: var(--bg); border-radius: 10px; padding: 8px 12px; font-size: 13px; display: none; }
   .card h2.fold { cursor: pointer; user-select: none; }
   .card h2.fold .arr { color: var(--quiet); font-weight: 400; margin-right: 4px; font-size: 12px; }
@@ -474,7 +476,7 @@ const isMine = owner => ME() === 'Justin' ? (!owner || owner === 'Justin') : own
 const CREW = () => !!(DATA && DATA.crew);
 function photoBar(id, url) {
   if (!DATA.photos) return url ? `<div class="detail"><a href="${esc(url)}" target="_blank">Photos ↗</a></div>` : '';
-  return `<div class="decide"><button type="button" class="small primary" onclick="CAM.open('${id}')">📷 Camera</button><label style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px;background:var(--card)">Add photos<input type="file" accept="image/*" multiple style="display:none" onchange="CAM.files(this,'${id}')"></label>${url ? `<a href="${esc(url)}" target="_blank">Open photos ↗</a>` : '<span class="sub">no photos yet</span>'}</div>`;
+  return `<div class="decide"><button type="button" class="small primary" onclick="CAM.open('${id}')">📷 Camera</button><button type="button" class="small primary" onclick="CAM.open('${id}',true)">🎥 Video</button><label style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px;background:var(--card)">Add photos / videos<input type="file" accept="image/*,video/*" multiple style="display:none" onchange="CAM.files(this,'${id}')"></label>${url ? `<a href="${esc(url)}" target="_blank">Open folder ↗</a>` : '<span class="sub">nothing saved yet</span>'}</div>`;
 }
 
 /* ---------- tasks ---------- */
@@ -899,18 +901,40 @@ const CAM = {
   status() {
     const left = this.queue.length + (this.busy ? 1 : 0);
     const t = (this.sent ? this.sent + ' saved' : '') + (left ? (this.sent ? ' · ' : '') + left + ' uploading…' : '') + (this.failed ? ' · ' + this.failed + ' failed: ' + this.err : '');
-    $('#camst').textContent = t || 'Tap the circle to take a photo';
+    if (!this.rec) $('#camst').textContent = t || (this.video ? 'Tap the red circle to start recording' : 'Tap the circle to take a photo');
     const bar = $('#upbar'); bar.textContent = '📷 ' + (t || ''); bar.style.display = t && $('#cam').style.display !== 'flex' && (left || this.failed) ? 'block' : 'none';
   },
-  async open(id) {
-    this.id = id; this.sent = 0; this.failed = 0;
+  async open(id, video) {
+    this.id = id; this.sent = 0; this.failed = 0; this.video = !!video; this.rec = null;
+    const sh = $('#cam .shutter'); sh.className = 'shutter' + (this.video ? ' rec' : ''); sh.title = this.video ? 'Start / stop recording' : 'Take photo';
     $('#cam').style.display = 'flex'; this.status();
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 4032 }, height: { ideal: 3024 } }, audio: false });
+      this.stream = await navigator.mediaDevices.getUserMedia(this.video
+        ? { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true }
+        : { video: { facingMode: { ideal: 'environment' }, width: { ideal: 4032 }, height: { ideal: 3024 } }, audio: false });
       const v = $('#camv'); v.srcObject = this.stream; await v.play();
-    } catch (e) { $('#camst').textContent = 'Camera not available here (' + (e.message || e.name) + '). Use "Add photos" instead.'; }
+    } catch (e) { $('#camst').textContent = 'Camera not available here (' + (e.message || e.name) + '). Use "Add photos / videos" instead.'; }
+  },
+  /* video: one tap starts, next tap (or 60 s) stops; the clip uploads as-is (720p keeps a minute under ~20 MB) */
+  record() {
+    if (!this.stream) return;
+    if (this.rec) { this.rec.stop(); return; }
+    if (!window.MediaRecorder) { $('#camst').textContent = 'This browser can\'t record video here. Use "Add photos / videos" instead.'; return; }
+    const type = ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+    const chunks = [], rec = new MediaRecorder(this.stream, Object.assign({ videoBitsPerSecond: 2500000 }, type ? { mimeType: type } : {}));
+    const t0 = Date.now(); let tick = null;
+    rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = () => {
+      clearInterval(tick); this.rec = null; $('#cam .shutter').className = 'shutter rec';
+      const blob = new Blob(chunks, { type: rec.mimeType || type || 'video/webm' });
+      if (blob.size) this.add(blob); else this.status();
+    };
+    rec.start(1000); this.rec = rec; $('#cam .shutter').className = 'shutter on';
+    tick = setInterval(() => { const s = Math.round((Date.now() - t0) / 1000); $('#camst').textContent = '● Recording ' + s + 's / 60s — tap to stop'; if (s >= 60 && rec.state === 'recording') rec.stop(); }, 500);
+    if (navigator.vibrate) navigator.vibrate(30);
   },
   async snap() {
+    if (this.video) return this.record();
     if (!this.stream) return;
     let blob = null;
     try { if (window.ImageCapture) blob = await new ImageCapture(this.stream.getVideoTracks()[0]).takePhoto(); } catch (e) {}
@@ -937,17 +961,21 @@ const CAM = {
     this.busy = true; this.status();
     const job = this.queue.shift();
     try {
-      const b64 = await this.shrink(job.blob);
-      await new Promise((ok, no) => google.script.run.withSuccessHandler(ok).withFailureHandler(no).photoUpload(KEY, job.id, b64, 'image/jpeg', job.id + ' ' + new Date(job.n).toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.jpg'));
+      const isV = (job.blob.type || '').indexOf('video/') === 0, stamp = job.id + ' ' + new Date(job.n).toISOString().slice(0, 19).replace(/[T:]/g, '-');
+      if (isV && job.blob.size > 45e6) throw new Error('clip over 45 MB — keep it under a minute');
+      const b64 = isV ? await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(',')[1]); fr.readAsDataURL(job.blob); }) : await this.shrink(job.blob);
+      const ext = isV ? (/mp4|quicktime/.test(job.blob.type) ? '.mp4' : '.webm') : '.jpg';
+      await new Promise((ok, no) => google.script.run.withSuccessHandler(ok).withFailureHandler(no).photoUpload(KEY, job.id, b64, isV ? (job.blob.type.split(';')[0] || 'video/webm') : 'image/jpeg', stamp + ext));
       this.sent++;
     } catch (e) { this.failed++; this.err = String((e && e.message) || e).slice(0, 80); }
     this.busy = false; this.status();
-    if (this.queue.length) this.pump(); else if ($('#cam').style.display !== 'flex') { toast(this.sent + ' photo' + (this.sent === 1 ? '' : 's') + ' saved'); load(); }
+    if (this.queue.length) this.pump(); else if ($('#cam').style.display !== 'flex') { toast(this.sent + ' file' + (this.sent === 1 ? '' : 's') + ' saved'); load(); }
   },
   close() {
+    if (this.rec) { this.rec.stop(); }
     if (this.stream) this.stream.getTracks().forEach(t => t.stop());
     this.stream = null; $('#cam').style.display = 'none'; this.status();
-    if (!this.queue.length && !this.busy && this.sent) { toast(this.sent + ' photo' + (this.sent === 1 ? '' : 's') + ' saved'); load(); }
+    if (!this.queue.length && !this.busy && this.sent) { toast(this.sent + ' file' + (this.sent === 1 ? '' : 's') + ' saved'); load(); }
   },
 };
 
