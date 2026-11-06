@@ -130,6 +130,7 @@
   .cam .shutter:active { background: #fff; }
   .cam .done { background: #fff; color: #000; border: 0; border-radius: 10px; padding: 10px 16px; font-size: 16px; }
   .cam.flash video { opacity: .4; }
+  .item .col { display: flex; flex-direction: column; gap: 6px; flex: none; }
   .bookrow { margin: -6px 0 10px 28px; padding: 8px 10px; border-left: 3px solid var(--accent, #2a7); background: var(--card); border-radius: 0 8px 8px 0; }
   .bookrow form.edit { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
   .bookrow form.edit .full { grid-column: 1 / -1; }
@@ -748,16 +749,18 @@ function priorityList(b, who) {
   b.leads.filter(l => mine(l.owner) && !l.later).forEach(l => {
     const first = /initial/i.test(l.stage), n = daysLate(l.next);
     if (l.next && n < 0 && !(first && n >= -1)) return;
-    const s = first ? 1000 + Math.max(n, 0) * 5 : !l.next ? 700 : n > 0 ? 830 + Math.min(n, 30) * 5 : 760;
-    add('l:' + l.id, s + (/estimate/i.test(l.stage) ? 40 : 0), 'Lead', first ? 'hot' : '', l.client + (l.job ? ' — ' + l.job : ''), whenChip(l.next, 'No date'), first ? 'First contact' : '', () => leadItem(l));
+    const s = /approved/i.test(l.stage) ? 900 + Math.min(Math.max(n, 0), 10) * 5 : first ? 1000 + Math.max(n, 0) * 5 : !l.next ? 700 : n > 0 ? 830 + Math.min(n, 30) * 5 : 760;
+    add('l:' + l.id, s + (/estimate/i.test(l.stage) ? 40 : 0), /approved/i.test(l.stage) ? 'Book' : 'Lead', first ? 'hot' : '', l.client + (l.job ? ' — ' + l.job : ''), whenChip(l.next, 'No date'), first ? 'First contact' : '', () => leadItem(l));
   });
   b.followups.filter(f => mine(f.owner) && !f.later && f.due <= DATA.today).forEach(f => {
     const n = daysLate(f.due), first = /new lead|call back/i.test(f.type), stale = isStale(f);
-    const s = stale ? 110 : first ? 1000 + n * 5 : n > 0 ? 830 + Math.min(n, 30) * 5 : 750;   /* stale-client re-engagement sits at the bottom, under everything but long-term work */
-    add('f:' + f.id, s + (/estimate|quote/i.test(f.type) ? 40 : 0), first ? 'Call back' : isWin(f) ? 'Last try' : /quote/i.test(f.type) ? 'Quote' : 'Follow-up', first ? 'hot' : '', f.client + (f.type ? ' — ' + f.type : ''), whenChip(f.due), first ? 'First contact' : '', () => fuItem(f));
+    /* order (Justin 11/6): immediate client needs > ready to book > normal follow-ups > seasonal batches > last tries > stale re-engagement — the slow burners only surface when nothing else is waiting */
+    const book = /ready to book/i.test(f.type), seasonal = /wind-down|startup/i.test(f.type);
+    const s = stale ? 110 : isWin(f) ? 130 : seasonal ? 250 + Math.min(n, 30) : book ? 900 + Math.min(n, 10) * 5 : first ? 1000 + n * 5 : n > 0 ? 830 + Math.min(n, 30) * 5 : 750;
+    add('f:' + f.id, s + (/estimate|quote/i.test(f.type) ? 40 : 0), first ? 'Call back' : book ? 'Book' : isWin(f) ? 'Last try' : seasonal ? 'Seasonal' : /quote/i.test(f.type) ? 'Quote' : 'Follow-up', first ? 'hot' : '', f.client + (f.type ? ' — ' + f.type : ''), whenChip(f.due), first ? 'First contact' : '', () => fuItem(f));
   });
   (b.all || []).filter(t => mine(t.owner)).forEach(t => {
-    if (t.state === 'review') return add('t:' + t.id, 800, 'Decide', 'dec', t.title, { t: 'Decide', late: false }, t.why, () => taskItem('business', t));
+    if (t.state === 'review') return add('t:' + t.id, 200, 'Decide', 'dec', t.title, { t: 'Decide', late: false }, t.why, () => taskItem('business', t));   /* deferred items coming back: low, not urgent */
     if (t.state !== 'active' && t.state !== 'schedule') return;
     const n = daysLate(t.due);
     let s = t.due && n > 0 ? 780 + Math.min(n, 30) * 4 : t.due && n === 0 ? 720 : t.due && n >= -7 ? 600 + n * 20 : t.pri === 1 ? 450 : t.pri === 2 ? 300 : 100;
@@ -876,11 +879,12 @@ function moneyHtml(b) {
     const t = 'Chase payment: ' + c.client + ' ' + money(c.bal) + ' (' + c.inv.map(i => i.num ? '#' + i.num : '').filter(String).join(', ') + ')';
     return `<div class="item"><div class="body"><div class="title">${clientLink(c.client)} <span class="${c.age > 30 ? 'late' : ''}">${money(c.bal)}</span></div>
       <div class="sub">${esc(what)}${ph ? ` · <a href="tel:${esc(ph)}">call</a> · <a href="sms:${esc(ph)}">text</a>` : ''}${em ? ` · <a href="mailto:${esc(em)}">email</a>` : ''}</div></div>
-      <button type="button" class="small" data-t="${esc(t)}" onclick="call('addTask',['business',this.dataset.t,'${DATA.today}','Alex','Clients & Jobs','Payment reminder — check Yardbook, then text or call.'],'Chase task added for Alex')">Chase</button></div>`; };
+      <div class="col"><button type="button" class="small" data-t="${esc(t)}" onclick="call('addTask',['business',this.dataset.t,'${DATA.today}','Alex','Clients & Jobs','Payment reminder — check Yardbook, then text or call.'],'Chase task added for Alex')">Chase</button>
+      <button type="button" class="small primary" data-c="${esc(c.client)}" data-w="${esc(what)}" onclick="if(this.dataset.ok){call('collectedMark',[this.dataset.c,this.dataset.w,'Marked paid'],'Marked collected — Alex will enter it in Yardbook')}else{this.dataset.ok=1;this.textContent='Sure? Collected'}">Collected</button></div></div>`; };
   const lc = byClient(late), nc = byClient(notYet);
   return collectedHtml(b) + card('Chasing money', null, `<div style="font-size:22px;font-weight:600">${money(m.total)} unpaid</div><div class="sub">${money(late.reduce((s, x) => s + x.bal, 0))} past due across ${lc.length} client${lc.length === 1 ? '' : 's'}</div>` +
       (m.missing && m.missing.length ? `<div class="why">Couldn't find these columns in the report: ${esc(m.missing.join(', '))}. Tell Claude.</div>` : '') + how, 'wide hero') +
-    card('Past due', lc.length, listBlock('money-late', lc, row, 'Nothing past due.'), 'wide') +
+    card('Past due', lc.length, listBlock('money-late', lc, row, 'Nothing past due.') + ((m.collected || []).length ? `<details><summary>Marked collected since the last report (${m.collected.length})</summary>${m.collected.map(x => `<div class="item"><div class="body"><div class="title">${clientLink(x.client)} ${money(x.bal)}</div><div class="sub">marked ${nice(x.markedOn)} · drops off once the next invoice report shows it paid</div></div></div>`).join('')}</details>` : ''), 'wide') +
     (nc.length ? card('Not due yet', nc.length, `<details><summary>Show ${nc.length}</summary>${nc.map(row).join('')}</details>`, 'wide') : '');
 }
 
