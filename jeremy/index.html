@@ -130,6 +130,9 @@
   .cam .shutter:active { background: #fff; }
   .cam .done { background: #fff; color: #000; border: 0; border-radius: 10px; padding: 10px 16px; font-size: 16px; }
   .cam.flash video { opacity: .4; }
+  .bookrow { margin: -6px 0 10px 28px; padding: 8px 10px; border-left: 3px solid var(--accent, #2a7); background: var(--card); border-radius: 0 8px 8px 0; }
+  .bookrow form.edit { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .bookrow form.edit .full { grid-column: 1 / -1; }
   .cam .shutter.rec { border-color: #e33; background: #e33; }
   .cam .shutter.on { border-color: #e33; background: #fff; border-radius: 18px; }
   #upbar { position: fixed; left: 8px; bottom: 94px; z-index: 13; background: var(--ink); color: var(--bg); border-radius: 10px; padding: 8px 12px; font-size: 13px; display: none; }
@@ -390,7 +393,7 @@ function saveForm(form, fn, a, b, msg) {
   call(fn, b === undefined ? [a, f] : [a, b, f], msg || 'Saved');
 }
 const STATUSES = ['Open', 'In progress', 'Waiting', 'Deferred', 'Needs review', 'Done'];
-const STAGES = ['Initial Contact', 'Estimate', 'Estimate Follow-up 1', 'Estimate Follow-up 2', 'Scheduled', '30-60 Day Follow-up', 'Deferred', 'Won', 'Closed / Lost'];
+const STAGES = ['Initial Contact', 'Estimate', 'Estimate Follow-up 1', 'Estimate Follow-up 2', 'Approved', 'Scheduled', '30-60 Day Follow-up', 'Deferred', 'Won', 'Closed / Lost'];
 const OWNERS = { home: ['Justin', 'Amy', 'Anyone'], business: ['Justin', 'Alex', 'Jeremy', 'Micah'] };
 
 
@@ -812,8 +815,19 @@ function bizHtml(b) {
 
 /* ---------- Pipeline tab: unanswered calls/texts on top, then leads, then follow-ups (win-backs last) ---------- */
 
-const LEAD_KIND = l => /estimate|quote/i.test(l.stage) ? 'est' : (/scheduled|won/i.test(l.stage) || /client/i.test(l.rel || '')) ? 'client' : 'new';
-const FU_KIND = f => /new lead|call back|lead/i.test(f.type) ? 'new' : /estimate|quote/i.test(f.type) ? 'est' : 'client';
+const LEAD_KIND = l => /approved/i.test(l.stage) ? 'book' : /estimate|quote/i.test(l.stage) ? 'est' : (/scheduled|won/i.test(l.stage) || /client/i.test(l.rel || '')) ? 'client' : 'new';
+const FU_KIND = f => /ready to book/i.test(f.type) ? 'book' : /new lead|call back|lead/i.test(f.type) ? 'new' : /estimate|quote/i.test(f.type) ? 'est' : 'client';
+/* Ready to book: the Book form (date, time, who) under each item */
+function bookForm(id) {
+  id = esc(id);
+  return `<form class="edit book" onsubmit="event.preventDefault();call('bookJob',['${id}',{date:this.d.value,time:this.t.value,who:this.w.value,note:this.n.value}],'Booked — on the calendar, Yardbook task made')">
+    <label>Day<input type="date" name="d" required></label>
+    <label>Time<input type="time" name="t"></label>
+    <label>Who<select name="w"><option value="">Crew</option>${OWNERS.business.map(o => `<option>${esc(o)}</option>`).join('')}</select></label>
+    <label class="full">Note<input name="n" placeholder="Anything the crew or Alex should know"></label>
+    <button class="small primary full">Book it</button>
+  </form>`;
+}
 function pipelineHtml(b) {
   if (!b || b.error) return errBox(b || { error: 'No data' });
   const team = (list, label, fn) => list.length ? `<details><summary>${label} (${list.length})</summary>${list.map(fn).join('')}</details>` : '';
@@ -821,13 +835,15 @@ function pipelineHtml(b) {
   const nLater = laterCount(b);
   const sect = (title, kind, none, sub) => {
     const L = leads.filter(l => LEAD_KIND(l) === kind), F = fus.filter(f => FU_KIND(f) === kind);
-    const all = L.map(l => ({ d: l.next || '0', h: () => leadItem(l), o: l.owner })).concat(F.map(f => ({ d: f.due, h: () => fuItem(f), o: f.owner }))).sort((a, c) => a.d.localeCompare(c.d));
+    const wrap = (html, id) => kind === 'book' ? html + '<div class="bookrow">' + bookForm(id) + '</div>' : html;
+    const all = L.map(l => ({ d: l.next || '0', h: () => wrap(leadItem(l, kind === 'book' ? 'Book' : ''), l.id), o: l.owner })).concat(F.map(f => ({ d: f.due, h: () => wrap(fuItem(f, kind === 'book' ? 'Book' : ''), f.id), o: f.owner }))).sort((a, c) => a.d.localeCompare(c.d));
     const mine = all.filter(x => isMine(x.o)), other = all.filter(x => !isMine(x.o));
     return card(title, mine.length, `<div class="sub" style="margin-bottom:6px">${sub}</div>` + listBlock('pipe-' + kind, mine, x => x.h(), none) + team(other.map(x => x.h), "Team's", h => h()), 'wide', 'f-' + kind);
   };
   const myWins = wins.filter(f => isMine(f.owner)), otherWins = wins.filter(f => !isMine(f.owner));
   return sect('New leads', 'new', 'No new leads for you.', "Haven't booked with us yet and haven't been quoted.") +
     sect('Estimates out', 'est', 'No estimates waiting on you.', 'Quoted, waiting on a yes.') +
+    sect('Ready to book', 'book', 'Nothing waiting for a date.', 'They said yes — pick a day. Booking puts it on the calendar and makes the Yardbook task for the office.') +
     sect('Client follow-ups', 'client', 'No client follow-ups due.', 'Customers who have booked with us.') +
     (wins.length ? card('Last tries', myWins.length, listBlock('wins', myWins, f => fuItem(f), 'None of yours.', 3) + team(otherWins, "Team's", f => fuItem(f)), 'wide') : '') +
     (nLater ? `<div class="sub" style="margin:4px 4px 12px">${nLater} more in <a href="#" onclick="setTab('later');return false">Later</a> (not due this week).</div>` : '');
