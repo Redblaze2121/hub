@@ -858,10 +858,10 @@ function collectedHtml(b) {
   const c = b.collected || {}; if (c.error) return errBox(c);
   const items = c.items || [], open = items.filter(x => !x.done), done = items.filter(x => x.done);
   const row = x => `<div class="item"><input type="checkbox" title="Entered in Yardbook" ${x.done ? 'checked' : ''} onclick="call('collectedEdit',[${x.row},{done:this.checked}],this.checked?'Marked entered':'Marked not entered')">
-    <div class="body"><div class="title">${x.client ? clientLink(x.client) : esc(x.raw)}${x.client && x.client.toLowerCase() !== x.raw.toLowerCase() ? ` <span class="sub">(texted "${esc(x.raw)}")</span>` : ''}${x.kind ? ' · ' + esc(x.kind) : ''}</div>
-    <div class="sub">${esc(x.when)} · ${esc(x.by)}${x.note ? ' · ' + esc(x.note) : ''}</div></div></div>`;
-  return card('Collected in the field', open.length || null,
-    `<div class="sub" style="margin-bottom:6px">Cash and checks the crew picked up (from their "Collected from…" texts to the office line). Tick each one once the payment is entered in Yardbook.</div>` +
+    <div class="body"><div class="title">${x.client ? clientLink(x.client) : esc(x.raw)}${x.client && x.client.toLowerCase() !== x.raw.toLowerCase() ? ` <span class="sub">(${/^Bank/.test(x.by) ? 'bank' : 'texted'} "${esc(x.raw)}")</span>` : ''}${x.kind ? ' · ' + esc(x.kind) : ''}</div>
+    <div class="sub">${esc(x.when)} · ${esc(x.by)}${/^Bank/.test(x.by) && x.text ? ' · ' + esc(x.text) : ''}${x.note ? ' · ' + esc(x.note) : ''}</div></div></div>`;
+  return card('Collected — enter in Yardbook', open.length || null,
+    `<div class="sub" style="margin-bottom:6px">Every payment Yardbook doesn't record by itself: cash and checks the crew picked up (their "Collected from…" texts), Zelle and mobile check deposits into the business account (from the bank feed, hourly), and anything marked Collected below. Tick each one once it's entered in Yardbook.</div>` +
     listBlock('collected-open', open, row, 'Nothing waiting to be entered.') +
     (done.length ? `<details><summary>Entered (last 60 days: ${done.length})</summary>${done.map(row).join('')}</details>` : ''), 'wide');
 }
