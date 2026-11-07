@@ -1041,7 +1041,7 @@ function visitsHtml(b) {
   const vs = b.visits || [];
   const up = vs.filter(v => v.status === 'Scheduled'), done = vs.filter(v => v.status !== 'Scheduled');
   const byDay = shown => { let last = '', list = ''; shown.forEach(v => { const h = v.past ? 'Not marked done yet' : v.today ? 'Today' : nice(v.date); if (h !== last) { list += `<div class="day">${h}</div>`; last = h; } list += visitItem(v); }); return list; };
-  return card('Site visits', up.length, capped('visits-up', up, byDay, 'None booked.') + addVisitForm(), 'wide hero') + availHtml(b) +
+  return card('Site visits', up.length, capped('visits-up', up, byDay, 'None booked.') + addVisitForm(), 'wide hero') + availHtml(b) + quoteHtml() +
     (done.length ? card('Done (last 3 days)', done.length, listBlock('visits-done', done, v => visitItem(v), 'None.'), '', 'f-vdone') : '') +
     card('Calendar', null, calHtml(b.calendar), '', 'f-cal');
 }
@@ -1072,6 +1072,39 @@ function availPick(date, time) {
   if (!f.w.value) f.w.value = AVMODE === 'lawn' ? 'Lawn care estimate' : 'Landscape consult';
   f.o.value = 'Justin'; box.scrollIntoView({ behavior: 'smooth', block: 'start' }); f.c.focus();
 }
+
+/* Quick lawn quote: same prices as the website instant quote; lawn size typed or estimated from Denton CAD */
+const QQ = { addr: '', sqft: '', busy: false, data: null, err: '' };
+function quoteHtml() {
+  const d = QQ.data, q = d && d.quote, money = n => '$' + n;
+  let res = '';
+  if (QQ.busy) res = '<div class="sub">Looking it up…</div>';
+  else if (QQ.err) res = `<div class="sub">${esc(QQ.err)}</div>`;
+  else if (d) {
+    if (d.msg) res += `<div class="sub">${esc(d.msg)}</div>`;
+    if (d.matches && d.matches.length) res += d.matches.map(m => `<div class="item"><div class="body"><div class="title">${esc(m.addr)}</div>
+      <div class="sub">Lot ${m.lot.toLocaleString()} sq ft · buildings ${m.bldg.toLocaleString()} sq ft · lawn about <b>${m.lawn.toLocaleString()}</b> sq ft (rough) ·
+      <a href="${'https:\/\/www.google.com/maps/search/?api=1&query=' + encodeURIComponent(m.addr)}" target="_blank">aerial</a></div>
+      <div class="decide"><button type="button" class="small" onclick="QQ.sqft='${m.lawn}';qqRun(false)">Use ${m.lawn.toLocaleString()} sq ft</button></div></div></div>`).join('');
+    if (q && q.ok) res += `<div class="item"><div class="body"><div class="title">${esc(q.label)} <span class="sub">(${q.sqft.toLocaleString()} sq ft)</span></div>
+      <div>Weekly <b>${money(q.weekly)}</b> · Every 2 weeks <b>${money(q.biweekly)}</b> · Monthly <b>${money(q.monthly)}</b> <span class="sub">per visit + tax</span></div>
+      <div class="sub">With a robot mower: ${money(q.robotWeekly)} weekly · ${money(q.robotBiweekly)} every 2 weeks. Overgrown first cut: $80/hr. Estimate until Justin or a tech sees the yard.</div>
+      <div class="decide"><button type="button" class="small" onclick="qqCopy()">Copy quote text</button></div></div></div>`;
+    else if (q) res += `<div class="sub">${esc(q.msg)}</div>`;
+  }
+  return card('Quick lawn quote', null,
+    `<form onsubmit="event.preventDefault();QQ.addr=this.a.value;QQ.sqft=this.s.value;qqRun(!!this.a.value&&!this.s.value)" class="decide" style="flex-wrap:wrap;gap:6px">
+      <input name="a" placeholder="Address (e.g. 1510 Hillcrest)" value="${esc(QQ.addr)}" style="flex:2;min-width:180px">
+      <input name="s" type="number" inputmode="numeric" placeholder="or lawn sq ft" value="${esc(QQ.sqft)}" style="flex:1;min-width:110px">
+      <button class="small primary">Quote</button></form>` + res, 'wide', 'f-quote');
+}
+function qqRun(lookup) {
+  QQ.busy = true; QQ.err = ''; if (lookup) QQ.data = null; draw();
+  const keep = QQ.data && QQ.data.matches;
+  google.script.run.withSuccessHandler(r => { QQ.busy = false; if (!lookup && keep && !r.matches.length) { r.matches = keep; r.msg = ''; } QQ.data = r; draw(); })
+    .withFailureHandler(e => { QQ.busy = false; QQ.err = e.message; draw(); }).quickQuote(KEY, lookup ? QQ.addr : '', lookup ? '' : QQ.sqft);
+}
+function qqCopy() { const q = QQ.data && QQ.data.quote; if (!q || !q.text) return; try { navigator.clipboard.writeText(q.text); toast('Copied — paste it into the text or email'); } catch (e) { prompt('Copy this:', q.text); } }
 
 /* ---------- Team tab ---------- */
 
