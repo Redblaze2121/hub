@@ -1041,9 +1041,36 @@ function visitsHtml(b) {
   const vs = b.visits || [];
   const up = vs.filter(v => v.status === 'Scheduled'), done = vs.filter(v => v.status !== 'Scheduled');
   const byDay = shown => { let last = '', list = ''; shown.forEach(v => { const h = v.past ? 'Not marked done yet' : v.today ? 'Today' : nice(v.date); if (h !== last) { list += `<div class="day">${h}</div>`; last = h; } list += visitItem(v); }); return list; };
-  return card('Site visits', up.length, capped('visits-up', up, byDay, 'None booked.') + addVisitForm(), 'wide hero') +
+  return card('Site visits', up.length, capped('visits-up', up, byDay, 'None booked.') + addVisitForm(), 'wide hero') + availHtml(b) +
     (done.length ? card('Done (last 3 days)', done.length, listBlock('visits-done', done, v => visitItem(v), 'None.'), '', 'f-vdone') : '') +
     card('Calendar', null, calHtml(b.calendar), '', 'f-cal');
+}
+
+/* Justin's open times: tap a time to pre-fill the booking form above */
+let AVMODE = 'lawn';
+function availHtml(b) {
+  const a = b.avail; if (!a || !a.days || CREW()) return '';
+  const mode = AVMODE, tm = t => { const h = +t.slice(0, 2), m = t.slice(3); return (((h + 11) % 12) + 1) + (m === '00' ? '' : ':' + m) + (h < 12 ? 'a' : 'p'); };
+  const row = d => {
+    let starts = (mode === 'lawn' ? d.lawn : d.land) || []; const bar = Math.max(0, Math.min(100, d.full));
+    if (starts.length > 9) { const hourly = starts.filter((t, i) => i === 0 || t.slice(3) === '00'); starts = hourly.length > 9 ? hourly.filter((t, i) => i % Math.ceil(hourly.length / 9) === 0) : hourly; }
+    const chips = starts.length ? starts.map(t => `<button type="button" class="small" onclick="availPick('${d.date}','${t}')">${tm(t)}</button>`).join(' ') : `<span class="sub">no room${d.full >= 100 ? ' (full)' : ''}</span>`;
+    return `<div class="item"><div class="body"><div class="title">${esc(d.label)}${d.saturday ? ' <span class="chip">only if needed</span>' : ''} <span class="sub">${esc(d.window)}${d.note ? ' · ' + esc(d.note) : ''}${d.near && d.near.length ? ' · already near ' + esc(d.near.join(', ')) : ''}</span></div>
+      <div style="height:6px;background:var(--line);border-radius:3px;margin:4px 0"><div style="height:6px;width:${bar}%;background:${bar >= 80 ? '#c55' : bar >= 50 ? '#d9a33a' : '#3a9'};border-radius:3px"></div></div>
+      <div class="decide">${chips}</div>${d.after && d.after.length ? `<div class="sub">After hours (ask first): ${esc(d.after.join(', '))}</div>` : ''}</div></div>`;
+  };
+  const days = a.days.filter(d => !d.saturday), sats = a.days.filter(d => d.saturday);
+  return card("Justin's open times", null,
+    `<div class="sub" style="margin-bottom:6px">Next two weeks. Tap a time to fill in the booking form above. Travel time and Justin's own appointments are already taken out.${a.stale ? ' <b>His personal calendar hasn\'t synced in a while — double-check with him.</b>' : ''}</div>
+     <div class="decide" style="margin-bottom:6px"><button type="button" class="small${mode === 'lawn' ? ' primary' : ''}" onclick="AVMODE='lawn';draw()">Lawn care (30 min)</button><button type="button" class="small${mode === 'land' ? ' primary' : ''}" onclick="AVMODE='land';draw()">Landscape / design (1 h)</button></div>` +
+    days.map(row).join('') + (sats.length ? `<details><summary>Saturdays (only if nothing else works)</summary>${sats.map(row).join('')}</details>` : ''), 'wide');
+}
+function availPick(date, time) {
+  const box = document.querySelector('details.addbox'); if (!box) return;
+  box.open = true; const f = box.querySelector('form');
+  f.d.value = date; f.t.value = time;
+  if (!f.w.value) f.w.value = AVMODE === 'lawn' ? 'Lawn care estimate' : 'Landscape consult';
+  f.o.value = 'Justin'; box.scrollIntoView({ behavior: 'smooth', block: 'start' }); f.c.focus();
 }
 
 /* ---------- Team tab ---------- */
