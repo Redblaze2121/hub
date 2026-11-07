@@ -755,9 +755,9 @@ function priorityList(b, who) {
   b.followups.filter(f => mine(f.owner) && !f.later && f.due <= DATA.today).forEach(f => {
     const n = daysLate(f.due), first = /new lead|call back/i.test(f.type), stale = isStale(f);
     /* order (Justin 11/6): immediate client needs > ready to book > normal follow-ups > seasonal batches > last tries > stale re-engagement — the slow burners only surface when nothing else is waiting */
-    const book = /ready to book/i.test(f.type), seasonal = /wind-down|startup/i.test(f.type);
-    const s = stale ? 110 : isWin(f) ? 130 : seasonal ? 250 + Math.min(n, 30) : book ? 900 + Math.min(n, 10) * 5 : first ? 1000 + n * 5 : n > 0 ? 830 + Math.min(n, 30) * 5 : 750;
-    add('f:' + f.id, s + (/estimate|quote/i.test(f.type) ? 40 : 0), first ? 'Call back' : book ? 'Book' : isWin(f) ? 'Last try' : seasonal ? 'Seasonal' : /quote/i.test(f.type) ? 'Quote' : 'Follow-up', first ? 'hot' : '', f.client + (f.type ? ' — ' + f.type : ''), whenChip(f.due), first ? 'First contact' : '', () => fuItem(f));
+    const book = /ready to book/i.test(f.type), seasonal = /wind-down|startup/i.test(f.type), review = /review request/i.test(f.type);
+    const s = stale ? 110 : isWin(f) ? 130 : seasonal ? 250 + Math.min(n, 30) : review ? (n >= 0 ? 600 + Math.min(n, 10) : -1) : book ? 900 + Math.min(n, 10) * 5 : first ? 1000 + n * 5 : n > 0 ? 830 + Math.min(n, 30) * 5 : 750;
+    add('f:' + f.id, s + (/estimate|quote/i.test(f.type) ? 40 : 0), first ? 'Call back' : book ? 'Book' : review ? 'Review' : isWin(f) ? 'Last try' : seasonal ? 'Seasonal' : /quote/i.test(f.type) ? 'Quote' : 'Follow-up', first ? 'hot' : '', f.client + (f.type ? ' — ' + f.type : ''), whenChip(f.due), first ? 'First contact' : '', () => fuItem(f));
   });
   (b.all || []).filter(t => mine(t.owner)).forEach(t => {
     if (t.state === 'review') return add('t:' + t.id, 200, 'Decide', 'dec', t.title, { t: 'Decide', late: false }, t.why, () => taskItem('business', t));   /* deferred items coming back: low, not urgent */
